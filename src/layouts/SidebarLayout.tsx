@@ -1,95 +1,216 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { NavLink, Outlet, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/app/AuthContext'
+import { canManageUsers, canViewIndicators } from '@/utils/permissions'
+import { ROLE_LABELS } from '@/utils/permissions'
+import type { User } from '@/types/auth'
+import {
+  LayoutDashboard,
+  Wrench,
+  AlertTriangle,
+  Settings,
+  Shield,
+  BarChart3,
+  ClipboardList,
+  Menu,
+  X,
+  ChevronRight,
+  LogOut,
+  Activity,
+  Users,
+  FileCheck,
+} from 'lucide-react'
+import SyncStatus from '@/components/SyncStatus'
+import NotificationsBell from '@/components/NotificationsBell'
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Tableau de bord', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-  { to: '/workqueue', label: 'File de travail', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', badge: 'error' },
-  { to: '/equipment', label: 'Parc équipements', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
-  { to: '/failures', label: 'Gestion des pannes', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z' },
-  { to: '/interventions', label: 'Interventions', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
-  { to: '/preventive', label: 'Maintenance préventive', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
-  { to: '/indicators', label: 'Indicateurs', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-]
-
-function Icon({ path, className = 'w-5 h-5' }: { path: string; className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d={path} />
-    </svg>
-  )
+interface NavItem {
+  to: string
+  label: string
+  icon: typeof LayoutDashboard
+  badge?: boolean
+  show?: (user: User | null) => boolean
 }
+
+const NAV_ITEMS: NavItem[] = [
+  { to: '/', label: 'Tableau de bord', icon: LayoutDashboard },
+  { to: '/workqueue', label: 'File de travail', icon: ClipboardList, badge: true },
+  { to: '/equipment', label: 'Parc équipements', icon: Settings },
+  { to: '/failures', label: 'Gestion des pannes', icon: AlertTriangle },
+  { to: '/interventions', label: 'Interventions', icon: Wrench },
+  { to: '/preventive', label: 'Maintenance préventive', icon: Shield },
+  { to: '/demandes', label: 'Demandes d\'accès', icon: FileCheck, show: canManageUsers },
+  { to: '/users', label: 'Gestion des utilisateurs', icon: Users, show: canManageUsers },
+  { to: '/indicators', label: 'Indicateurs', icon: BarChart3, show: canViewIndicators },
+]
 
 export default function SidebarLayout() {
   const { user, logout } = useAuth()
-  const navigate = useNavigate()
+  const location = useLocation()
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [location.pathname])
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-surface">
-      {/* Sidebar */}
-      <aside className="w-[240px] bg-inverse-surface text-inverse-on-surface flex flex-col shrink-0">
-        {/* Logo */}
-        <div className="h-16 px-5 flex items-center gap-3 border-b border-inverse-on-surface/10">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <svg className="w-5 h-5 text-on-primary" fill="none" stroke="currentColor" viewBox="0 0 42 42">
-              <path d="M7 21h7l3.5-9 6 18 5-13 3.5 4h7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.2" />
-            </svg>
-          </div>
-          <span className="text-sm font-bold tracking-tight">SIM-BIOMED</span>
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) setMobileOpen(false)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const SidebarContent = ({ isMobile = false }: { isMobile?: boolean }) => (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
+        <div className="w-9 h-9 rounded-lg bg-medical-primary flex items-center justify-center shrink-0">
+          <Activity className="w-5 h-5 text-white" />
         </div>
+        {(!collapsed || isMobile) && (
+          <div className="min-w-0">
+            <span className="block text-sm font-bold text-white tracking-tight truncate">SIM-BIOMED</span>
+            <span className="block text-[10px] text-slate-400 truncate">Maintenance Biomédicale</span>
+          </div>
+        )}
+      </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => (
+      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto" aria-label="Navigation principale">
+        {NAV_ITEMS.filter((item) => !item.show || item.show(user)).map((item) => {
+          const Icon = item.icon
+          const isActive = item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)
+          return (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary/20 text-inverse-on-surface'
-                    : 'text-inverse-on-surface/70 hover:bg-inverse-on-surface/10 hover:text-inverse-on-surface'
-                }`
-              }
+              aria-current={isActive ? 'page' : undefined}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
+                isActive
+                  ? 'bg-white/10 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              } ${collapsed && !isMobile ? 'justify-center px-2' : ''}`}
+              title={collapsed && !isMobile ? item.label : undefined}
             >
-              <Icon path={item.icon} />
-              <span>{item.label}</span>
+              <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-medical-primary' : 'text-slate-500 group-hover:text-slate-300'}`} />
+              {(!collapsed || isMobile) && <span className="truncate">{item.label}</span>}
+              {(!collapsed || isMobile) && item.badge && (
+                <span className="ml-auto w-2 h-2 rounded-full bg-red-500 animate-critical-pulse" aria-label="Alerte" />
+              )}
             </NavLink>
-          ))}
-        </nav>
+          )
+        })}
+      </nav>
 
-        {/* User footer */}
-        <div className="p-3 border-t border-inverse-on-surface/10">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container text-xs font-bold">
-              {user?.first_name?.[0]}{user?.last_name?.[0]}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold truncate">{user?.first_name} {user?.last_name}</div>
-              <div className="text-[10px] text-inverse-on-surface/50 truncate">{user?.role}</div>
-            </div>
+      <div className="px-3 py-4 border-t border-white/10">
+        {(!collapsed || isMobile) ? (
+          <div className="flex items-center gap-3 px-2">
+            <Link to="/profile" className="flex items-center gap-3 min-w-0 flex-1 group">
+              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white shrink-0">
+                {user?.first_name?.[0]}{user?.last_name?.[0]}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-white truncate group-hover:text-sky-300 transition-colors">{user?.first_name} {user?.last_name}</p>
+                <p className="text-[10px] text-slate-500 truncate">{user?.role ? ROLE_LABELS[user.role] : ''}</p>
+              </div>
+            </Link>
+            <button
+              onClick={logout}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
+              aria-label="Déconnexion"
+              title="Déconnexion"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
+        ) : (
           <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-inverse-on-surface/60 hover:bg-inverse-on-surface/10 hover:text-inverse-on-surface transition-colors"
+            onClick={logout}
+            className="w-full flex justify-center p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Déconnexion"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-            </svg>
-            Déconnexion
+            <LogOut className="w-4 h-4" />
           </button>
-        </div>
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="min-h-screen flex bg-app-bg">
+      <a href="#main-content" className="skip-nav">Aller au contenu principal</a>
+      {/* Desktop sidebar */}
+      <aside
+        className={`hidden lg:flex flex-col bg-nav shrink-0 transition-all duration-200 ${collapsed ? 'w-[72px]' : 'w-[260px]'}`}
+      >
+        <SidebarContent />
       </aside>
 
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
+          <aside className="relative w-[280px] h-full bg-nav shadow-modal animate-slide-in">
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+              aria-label="Fermer le menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <SidebarContent isMobile />
+          </aside>
+        </div>
+      )}
+
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-y-auto">
-          <Outlet />
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* TopBar */}
+        <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-6 shrink-0 sticky top-0 z-40">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="lg:hidden p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100"
+              aria-label="Ouvrir le menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="hidden lg:flex p-2 -ml-2 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors"
+              aria-label={collapsed ? 'Développer la barre latérale' : 'Réduire la barre latérale'}
+            >
+              <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`} />
+            </button>
+            <nav className="hidden md:flex items-center gap-1.5 text-xs text-slate-500" aria-label="Fil d'Ariane">
+              {NAV_ITEMS.find((n) => n.to === '/' && location.pathname === '/') && (
+                <span className="text-slate-700 font-medium">Tableau de bord</span>
+              )}
+              {NAV_ITEMS.filter((n) => n.to !== '/' && (!n.show || n.show(user))).map((n) => {
+                if (!location.pathname.startsWith(n.to)) return null
+                return (
+                  <span key={n.to} className="flex items-center gap-1.5">
+                    <span className="text-slate-300">/</span>
+                    <span className="text-slate-700 font-medium">{n.label}</span>
+                  </span>
+                )
+              })}
+            </nav>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span>Site Central — Hôpital Nord</span>
+            </div>
+            <NotificationsBell />
+            <SyncStatus />
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main id="main-content" className="flex-1 p-4 lg:p-6 overflow-auto">
+          <div className="max-w-[1680px] mx-auto">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

@@ -6,6 +6,9 @@ export interface User {
   last_name: string
   role: 'ADMINISTRATEUR' | 'RESPONSABLE_BIOMEDICAL' | 'TECHNICIEN' | 'PERSONNEL_SOIGNANT' | 'DIRECTION'
   matricule: string
+  is_active: boolean
+  profil_complete: boolean
+  etablissement?: number | null
 }
 
 export interface AuthTokens {

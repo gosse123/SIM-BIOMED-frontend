@@ -1,96 +1,115 @@
 import { useState, useEffect } from 'react'
 import { preventiveApi } from '@/services/preventive'
 import type { MaintenancePreventive } from '@/types/preventive'
-import { STATUT_MAINTENANCE_LABELS, STATUT_MAINTENANCE_COLORS } from '@/types/preventive'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { LoadingState, ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
+import PageHeader from '@/components/ui/PageHeader'
+import { toast } from '@/components/ui/Toast'
+import { Play, CheckCircle2 } from 'lucide-react'
 
 export default function PreventivePage() {
   const [maintenances, setMaintenances] = useState<MaintenancePreventive[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
-    loadMaintenances()
-  }, [])
-
-  const loadMaintenances = async () => {
-    setIsLoading(true)
+  const fetchData = async () => {
+    setLoading(true)
     try {
       const data = await preventiveApi.listPreventive()
-      setMaintenances(data.results || data)
-    } catch (error) {
-      console.error('Erreur chargement maintenances:', error)
+      setMaintenances(data)
+      setError('')
+    } catch {
+      setError('Erreur de chargement')
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
+
+  useEffect(() => { fetchData() }, [])
 
   const handleStart = async (id: number) => {
     try {
       await preventiveApi.start(id)
-      loadMaintenances()
-    } catch (error: any) {
-      alert(error?.response?.data?.detail || 'Erreur lors du démarrage.')
+      toast('success', 'Maintenance démarrée')
+      fetchData()
+    } catch (err: any) {
+      toast('error', err?.response?.data?.detail || 'Erreur lors du démarrage.')
     }
   }
 
   const handleFinish = async (id: number) => {
     try {
       await preventiveApi.finish(id, { commentaire: '' })
-      loadMaintenances()
-    } catch (error: any) {
-      alert(error?.response?.data?.detail || 'Erreur lors de la finalisation.')
+      toast('success', 'Maintenance terminée')
+      fetchData()
+    } catch (err: any) {
+      toast('error', err?.response?.data?.detail || 'Erreur lors de la finalisation.')
     }
   }
 
-  return (
-    <div className="p-6 space-y-6 max-w-[1680px] mx-auto">
-      <h1 className="text-xl font-bold text-on-surface">Maintenance préventive</h1>
+  if (loading) return <LoadingState />
+  if (error) return <ErrorState message={error} onRetry={fetchData} />
 
-      {isLoading ? (
-        <div className="text-center py-12 text-on-surface-variant">Chargement...</div>
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Maintenance préventive" description={`${maintenances.length} maintenance${maintenances.length > 1 ? 's' : ''}`} />
+
+      {maintenances.length === 0 ? (
+        <EmptyState title="Aucune maintenance préventive" description="Aucune maintenance préventive n'est planifiée." />
       ) : (
-        <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-surface-container-low text-on-surface-variant text-xs uppercase tracking-wider">
-                <th className="py-3 px-4">Équipement</th>
-                <th className="py-3 px-4">Plan</th>
-                <th className="py-3 px-4">Statut</th>
-                <th className="py-3 px-4">Date planifiée</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-container">
-              {maintenances.map((mp) => (
-                <tr key={mp.id} className="hover:bg-surface-container-low/60 transition-colors">
-                  <td className="py-3 px-4">
-                    <div className="font-semibold text-on-surface text-sm">{mp.equipement_nom || `Équipement #${mp.equipement}`}</div>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-on-surface">{mp.plan_nom}</td>
-                  <td className="py-3 px-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${STATUT_MAINTENANCE_COLORS[mp.statut]}`}>
-                      {STATUT_MAINTENANCE_LABELS[mp.statut]}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-on-surface-variant">
-                    {new Date(mp.date_planifiee).toLocaleDateString('fr-FR')}
-                  </td>
-                  <td className="py-3 px-4 text-right space-x-2">
-                    {mp.statut === 'PLANIFIEE' && (
-                      <button onClick={() => handleStart(mp.id)} className="text-primary hover:text-primary-container text-sm font-semibold">
-                        Démarrer
-                      </button>
-                    )}
-                    {mp.statut === 'EN_COURS' && (
-                      <button onClick={() => handleFinish(mp.id)} className="text-emerald-600 hover:text-emerald-700 text-sm font-semibold">
-                        Terminer
-                      </button>
-                    )}
-                  </td>
+        <>
+          <div className="hidden md:block card overflow-hidden">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide" scope="col">Équipement</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide" scope="col">Plan</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide" scope="col">Statut</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide" scope="col">Date planifiée</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide" scope="col">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {maintenances.map((mp) => (
+                  <tr key={mp.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-medium text-slate-900">{mp.equipement_nom || `Équipement #${mp.equipement}`}</p>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{mp.plan_nom}</td>
+                    <td className="px-4 py-3"><StatusBadge status={mp.statut} /></td>
+                    <td className="px-4 py-3 text-sm text-slate-500">{new Date(mp.date_planifiee).toLocaleDateString('fr-FR')}</td>
+                    <td className="px-4 py-3 flex gap-2">
+                      {mp.statut === 'PLANIFIEE' && (
+                        <button onClick={() => handleStart(mp.id)} className="btn-primary text-xs"><Play className="w-3 h-3" /> Démarrer</button>
+                      )}
+                      {mp.statut === 'EN_COURS' && (
+                        <button onClick={() => handleFinish(mp.id)} className="btn-primary text-xs"><CheckCircle2 className="w-3 h-3" /> Terminer</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="md:hidden space-y-3">
+            {maintenances.map((mp) => (
+              <div key={mp.id} className="card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{mp.equipement_nom || `Équipement #${mp.equipement}`}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{mp.plan_nom} • {new Date(mp.date_planifiee).toLocaleDateString('fr-FR')}</p>
+                  </div>
+                  <StatusBadge status={mp.statut} />
+                </div>
+                <div className="mt-3 flex gap-2">
+                  {mp.statut === 'PLANIFIEE' && <button onClick={() => handleStart(mp.id)} className="btn-primary text-xs"><Play className="w-3 h-3" /> Démarrer</button>}
+                  {mp.statut === 'EN_COURS' && <button onClick={() => handleFinish(mp.id)} className="btn-primary text-xs"><CheckCircle2 className="w-3 h-3" /> Terminer</button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

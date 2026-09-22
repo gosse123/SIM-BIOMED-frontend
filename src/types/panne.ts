@@ -68,13 +68,13 @@ export const STATUT_PANNE_LABELS: Record<StatutPanne, string> = {
 }
 
 export const STATUT_PANNE_COLORS: Record<StatutPanne, string> = {
-  SIGNALEE: 'bg-error/10 text-error border border-error/20',
-  QUALIFIEE: 'bg-amber-50 text-amber-800 border border-amber-200',
-  CRITICITE_EVALUEE: 'bg-orange-50 text-orange-800 border border-orange-200',
-  EN_DIAGNOSTIC: 'bg-primary-fixed text-on-primary-fixed-variant border border-primary/20',
-  EN_INTERVENTION: 'bg-surface-variant text-on-surface border border-outline-variant',
-  EN_TEST: 'bg-teal-50 text-teal-800 border border-teal-200',
-  EN_ATTENTE_PIECE: 'bg-surface-container-high text-outline border border-outline-variant',
-  EN_ATTENTE_PRESTATAIRE: 'bg-surface-container-high text-outline border border-outline-variant',
-  CLOSE: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+  SIGNALEE: 'bg-red-50 text-red-700 border border-red-200',
+  QUALIFIEE: 'bg-amber-50 text-amber-700 border border-amber-200',
+  CRITICITE_EVALUEE: 'bg-orange-50 text-orange-700 border border-orange-200',
+  EN_DIAGNOSTIC: 'bg-sky-50 text-sky-700 border border-sky-200',
+  EN_INTERVENTION: 'bg-blue-50 text-blue-700 border border-blue-200',
+  EN_TEST: 'bg-purple-50 text-purple-700 border border-purple-200',
+  EN_ATTENTE_PIECE: 'bg-slate-100 text-slate-700 border border-slate-200',
+  EN_ATTENTE_PRESTATAIRE: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+  CLOSE: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
 }

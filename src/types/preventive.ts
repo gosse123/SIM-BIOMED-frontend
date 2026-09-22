@@ -55,9 +55,9 @@ export const STATUT_MAINTENANCE_LABELS: Record<StatutMaintenance, string> = {
 }
 
 export const STATUT_MAINTENANCE_COLORS: Record<StatutMaintenance, string> = {
-  PLANIFIEE: 'bg-primary-fixed text-on-primary-fixed-variant border border-primary/20',
-  EN_COURS: 'bg-teal-50 text-teal-800 border border-teal-200',
-  TERMINEE: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
-  ANNULEE: 'bg-surface-container-high text-outline border border-outline-variant',
-  EN_RETARD: 'bg-error-container text-on-error-container border border-error/20',
+  PLANIFIEE: 'bg-sky-50 text-sky-700 border border-sky-200',
+  EN_COURS: 'bg-teal-50 text-teal-700 border border-teal-200',
+  TERMINEE: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  ANNULEE: 'bg-slate-100 text-slate-500 border border-slate-200',
+  EN_RETARD: 'bg-red-50 text-red-700 border border-red-200',
 }

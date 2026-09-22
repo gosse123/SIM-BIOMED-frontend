@@ -1,15 +1,46 @@
-import api from './api'
+import api, { offlineAwareRequest } from './api'
+import { put, get } from './db'
 import type { Intervention } from '@/types/intervention'
+import { normalizeList } from '@/types/api'
+import { network } from './network'
+
+const CACHE_TTL = 10 * 60 * 1000
 
 export const interventionApi = {
-  list: async (params?: Record<string, string>) => {
-    const { data } = await api.get('/interventions/', { params })
-    return data
+  list: async (params?: Record<string, string>): Promise<Intervention[]> => {
+    const cacheKey = `interventions-list${params ? JSON.stringify(params) : ''}`
+
+    if (network.isOnline()) {
+      try {
+        const { data } = await api.get('/interventions/', { params })
+        await put('interventions', cacheKey, data, CACHE_TTL)
+        return normalizeList<Intervention>(data)
+      } catch {
+        const cached = await get<Intervention[] | { results?: Intervention[] }>('interventions', cacheKey)
+        return cached ? normalizeList<Intervention>(cached) : []
+      }
+    }
+
+    const cached = await get<Intervention[] | { results?: Intervention[] }>('interventions', cacheKey)
+    return cached ? normalizeList<Intervention>(cached) : []
   },
 
   get: async (id: number): Promise<Intervention> => {
-    const { data } = await api.get(`/interventions/${id}/`)
-    return data
+    const cacheKey = `intervention-${id}`
+
+    if (network.isOnline()) {
+      try {
+        const { data } = await api.get(`/interventions/${id}/`)
+        await put('interventions', cacheKey, data, CACHE_TTL)
+        return data
+      } catch {
+        const cached = await get<Intervention>('interventions', cacheKey)
+        return cached || {} as Intervention
+      }
+    }
+
+    const cached = await get<Intervention>('interventions', cacheKey)
+    return cached || {} as Intervention
   },
 
   create: async (payload: {
@@ -19,17 +50,17 @@ export const interventionApi = {
     description: string
     pieces_utilisees?: string
   }): Promise<Intervention> => {
-    const { data } = await api.post('/interventions/', payload)
+    const { data } = await offlineAwareRequest<Intervention>('post', '/interventions/', payload)
     return data
   },
 
   start: async (id: number): Promise<Intervention> => {
-    const { data } = await api.post(`/interventions/${id}/start/`, {})
+    const { data } = await offlineAwareRequest<Intervention>('post', `/interventions/${id}/start/`, {})
     return data
   },
 
   finish: async (id: number, payload: { temps_passe_minutes: number; pieces_utilisees?: string }): Promise<Intervention> => {
-    const { data } = await api.post(`/interventions/${id}/finish/`, payload)
+    const { data } = await offlineAwareRequest<Intervention>('post', `/interventions/${id}/finish/`, payload)
     return data
   },
 }

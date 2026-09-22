@@ -1,263 +1,196 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { equipmentApi } from '@/services/equipment'
-import type { Equipment, Service, Localisation } from '@/types/equipment'
+import type { Equipment } from '@/types/equipment'
+import PageHeader from '@/components/ui/PageHeader'
+import { LoadingState, ErrorState } from '@/components/ui/FeedbackStates'
+import DeviceDetailHeader from '@/components/equipment/DeviceDetailHeader'
+import NavigationTabs from '@/components/equipment/NavigationTabs'
+import ManufacturerSpecsCard from '@/components/equipment/ManufacturerSpecsCard'
+import MaintenanceContractCard from '@/components/equipment/MaintenanceContractCard'
+import ClinicalLocationCard from '@/components/equipment/ClinicalLocationCard'
+import MetrologyStatusCard from '@/components/equipment/MetrologyStatusCard'
+import ReliabilityKpiGrid from '@/components/equipment/ReliabilityKpiGrid'
+import AuditTimeline from '@/components/equipment/AuditTimeline'
+import { panneApi } from '@/services/panne'
+import { interventionApi } from '@/services/intervention'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Link } from 'react-router-dom'
+import { AlertTriangle, Wrench, Calendar } from 'lucide-react'
 
-const STATUT_LABELS: Record<string, string> = {
-  FONCTIONNEL: 'Fonctionnel',
-  FONCTIONNEL_SOUS_SURVEILLANCE: 'Sous surveillance',
-  EN_PANNE: 'En panne',
-  EN_MAINTENANCE: 'En maintenance',
-  EN_ATTENTE_PIECE_OU_PRESTATAIRE: 'En attente',
-  HORS_SERVICE: 'Hors service',
-  REFORME: 'Réformé',
-}
-
-const STATUT_BADGE: Record<string, string> = {
-  FONCTIONNEL: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
-  FONCTIONNEL_SOUS_SURVEILLANCE: 'bg-amber-50 text-amber-800 border border-amber-200',
-  EN_PANNE: 'bg-error-container text-on-error-container border border-error/20',
-  EN_MAINTENANCE: 'bg-primary-fixed text-on-primary-fixed-variant border border-primary/20',
-  EN_ATTENTE_PIECE_OU_PRESTATAIRE: 'bg-surface-variant text-on-surface border border-outline-variant',
-  HORS_SERVICE: 'bg-surface-container-high text-on-surface-variant border border-outline-variant',
-  REFORME: 'bg-surface-container-high text-outline border border-outline-variant',
-}
+const TABS = [
+  { key: 'infos', label: 'Informations générales' },
+  { key: 'historique', label: 'Historique & Traçabilité' },
+  { key: 'pannes', label: 'Pannes & Incidents', count: 0 },
+  { key: 'interventions', label: 'Interventions réalisées', count: 0 },
+  { key: 'preventive', label: 'Maintenance préventive' },
+]
 
 export default function EquipmentDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const isCreate = !id || id === 'new'
-
-  const [equipment, setEquipment] = useState<Equipment | null>(null)
-  const [services, setServices] = useState<Service[]>([])
-  const [locations, setLocations] = useState<Localisation[]>([])
-  const [isLoading, setIsLoading] = useState(!isCreate)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [device, setDevice] = useState<Equipment | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [activeTab, setActiveTab] = useState('infos')
+  const [pannes, setPannes] = useState<any[]>([])
+  const [interventions, setInterventions] = useState<any[]>([])
 
-  const [form, setForm] = useState({
-    num_inventaire: '',
-    nom: '',
-    type_equipement: '',
-    categorie: '',
-    marque: '',
-    modele: '',
-    num_serie: '',
-    service: '',
-    localisation: '',
-    date_reception: '',
-    date_installation: '',
-    date_mise_service: '',
-    etat_operationnel: 'FONCTIONNEL',
-    niveau_criticite: 'MOYEN',
+  const fetchData = async () => {
+    if (!id) return
+    setLoading(true)
+    try {
+      const eq = await equipmentApi.get(Number(id))
+      setDevice(eq)
+      setError('')
+    } catch {
+      setError('Équipement introuvable.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchData() }, [id])
+
+  useEffect(() => {
+    if (!device) return
+    if (activeTab === 'pannes') {
+      panneApi.list().then((data) => {
+        setPannes(data.filter((p: any) => p.equipement === device.id))
+      }).catch(() => {})
+    }
+    if (activeTab === 'interventions') {
+      interventionApi.list().then((data) => {
+        setInterventions(data.filter((i: any) => i.equipement === device.id))
+      }).catch(() => {})
+    }
+  }, [activeTab, device])
+
+  const handleReportFault = () => {
+    navigate(`/failures/new?equipment=${device?.id}`)
+  }
+
+  if (loading) return <LoadingState />
+  if (error || !device) return <ErrorState message={error || 'Équipement introuvable.'} onRetry={() => navigate('/equipment')} />
+
+  const tabs = TABS.map(t => {
+    if (t.key === 'pannes') return { ...t, count: pannes.length }
+    if (t.key === 'interventions') return { ...t, count: interventions.length }
+    return t
   })
 
-  useEffect(() => {
-    Promise.all([equipmentApi.listServices(), equipmentApi.listLocations()])
-      .then(([s, l]) => { setServices(s); setLocations(l) })
-      .catch(console.error)
-  }, [])
-
-  useEffect(() => {
-    if (id && id !== 'new') {
-      equipmentApi.get(Number(id))
-        .then((eq) => {
-          setEquipment(eq)
-          setForm({
-            num_inventaire: eq.num_inventaire,
-            nom: eq.nom,
-            type_equipement: eq.type_equipement,
-            categorie: eq.categorie,
-            marque: eq.marque,
-            modele: eq.modele,
-            num_serie: eq.num_serie || '',
-            service: String(eq.service),
-            localisation: String(eq.localisation),
-            date_reception: eq.date_reception || '',
-            date_installation: eq.date_installation || '',
-            date_mise_service: eq.date_mise_service || '',
-            etat_operationnel: eq.etat_operationnel,
-            niveau_criticite: eq.niveau_criticite,
-          })
-        })
-        .catch(console.error)
-        .finally(() => setIsLoading(false))
-    }
-  }, [id])
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value })
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setIsSubmitting(true)
-    try {
-      const payload = {
-        ...form,
-        service: Number(form.service),
-        localisation: Number(form.localisation),
-      }
-      if (isCreate) {
-        const result = await equipmentApi.create(payload)
-        navigate(`/equipment/${result.id}`)
-      } else {
-        await equipmentApi.update(Number(id), payload)
-        navigate(`/equipment/${id}`)
-      }
-    } catch (err: any) {
-      const msg = err?.response?.data
-      setError(typeof msg === 'string' ? msg : JSON.stringify(msg) || 'Erreur lors de la sauvegarde.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  if (isLoading) return <div className="p-6 text-on-surface-variant">Chargement...</div>
-
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-2 text-sm text-on-surface-variant">
-        <Link to="/equipment" className="hover:text-primary">Inventaire du parc</Link>
-        <span>/</span>
-        <span className="text-on-surface font-semibold">{isCreate ? 'Nouvel équipement' : `#${id}`}</span>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title=""
+        breadcrumbs={[
+          { label: 'Inventaire', href: '/equipment' },
+          { label: device.nom },
+        ]}
+      />
 
-      <h1 className="text-xl font-bold text-on-surface">
-        {isCreate ? 'Ajouter un équipement' : `Modifier ${equipment?.nom || ''}`}
-      </h1>
+      <DeviceDetailHeader device={device} onReportFault={handleReportFault} />
 
-      <form onSubmit={handleSubmit} className="bg-surface-container-lowest rounded-xl p-6 shadow-sm space-y-6">
-        {error && (
-          <div className="bg-error-container text-on-error-container p-3 rounded-lg text-sm">{error}</div>
-        )}
+      <NavigationTabs tabs={tabs} currentTab={activeTab} onChange={setActiveTab} />
 
-        {/* Identification */}
-        <div className="space-y-4">
-          <h2 className="font-semibold text-on-surface border-b border-surface-container pb-2">Identification</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">N° Inventaire *</label>
-              <input name="num_inventaire" value={form.num_inventaire} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" required />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">Nom *</label>
-              <input name="nom" value={form.nom} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" required />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">Type d'équipement *</label>
-              <input name="type_equipement" value={form.type_equipement} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" required />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">Catégorie *</label>
-              <input name="categorie" value={form.categorie} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" required />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">Marque *</label>
-              <input name="marque" value={form.marque} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" required />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">Modèle *</label>
-              <input name="modele" value={form.modele} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" required />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">N° Série</label>
-              <input name="num_serie" value={form.num_serie} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" />
-            </div>
+      {activeTab === 'infos' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-6">
+            <ManufacturerSpecsCard
+              marque={device.marque}
+              modele={device.modele}
+              num_serie={device.num_serie}
+              categorie={device.categorie}
+              type_equipement={device.type_equipement}
+            />
+            <MaintenanceContractCard />
+          </div>
+          <div className="lg:col-span-2 space-y-6">
+            <ClinicalLocationCard equipment={device} />
+            <MetrologyStatusCard />
+            <ReliabilityKpiGrid />
           </div>
         </div>
+      )}
 
-        {/* Affectation */}
+      {activeTab === 'historique' && (
+        <AuditTimeline />
+      )}
+
+      {activeTab === 'pannes' && (
         <div className="space-y-4">
-          <h2 className="font-semibold text-on-surface border-b border-surface-container pb-2">Affectation & Localisation</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">Service *</label>
-              <select name="service" value={form.service} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" required>
-                <option value="">Sélectionner un service</option>
-                {services.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
-              </select>
+          {pannes.length === 0 ? (
+            <div className="card p-8 text-center">
+              <AlertTriangle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm text-slate-500">Aucune panne enregistrée pour cet équipement.</p>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">Localisation *</label>
-              <select name="localisation" value={form.localisation} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" required>
-                <option value="">Sélectionner une localisation</option>
-                {locations.map(l => <option key={l.id} value={l.id}>{l.batiment} - {l.salle}</option>)}
-              </select>
+          ) : (
+            <div className="card overflow-hidden">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase" scope="col">Statut</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase" scope="col">Description</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase" scope="col">Date</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase" scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {pannes.map((p: any) => (
+                    <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-4 py-3"><StatusBadge status={p.statut} /></td>
+                      <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate">{p.description_signalement}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500">{new Date(p.date_signalement).toLocaleDateString('fr-FR')}</td>
+                      <td className="px-4 py-3"><Link to={`/failures/${p.id}`} className="btn-ghost text-xs">Voir</Link></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          )}
         </div>
+      )}
 
-        {/* Dates */}
+      {activeTab === 'interventions' && (
         <div className="space-y-4">
-          <h2 className="font-semibold text-on-surface border-b border-surface-container pb-2">Dates</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">Réception</label>
-              <input name="date_reception" type="date" value={form.date_reception} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" />
+          {interventions.length === 0 ? (
+            <div className="card p-8 text-center">
+              <Wrench className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm text-slate-500">Aucune intervention enregistrée pour cet équipement.</p>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">Installation</label>
-              <input name="date_installation" type="date" value={form.date_installation} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" />
+          ) : (
+            <div className="card overflow-hidden">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase" scope="col">Type</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase" scope="col">Statut</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase" scope="col">Temps</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase" scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {interventions.map((i: any) => (
+                    <tr key={i.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-4 py-3 text-sm text-slate-700">{i.type_intervention}</td>
+                      <td className="px-4 py-3"><StatusBadge status={i.statut} /></td>
+                      <td className="px-4 py-3 text-sm text-slate-500">{i.temps_passe_minutes ? `${i.temps_passe_minutes} min` : '—'}</td>
+                      <td className="px-4 py-3"><Link to={`/interventions/${i.id}`} className="btn-ghost text-xs">Voir</Link></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">Mise en service</label>
-              <input name="date_mise_service" type="date" value={form.date_mise_service} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary" />
-            </div>
-          </div>
+          )}
         </div>
+      )}
 
-        {/* Statut */}
-        <div className="space-y-4">
-          <h2 className="font-semibold text-on-surface border-b border-surface-container pb-2">État</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">État opérationnel</label>
-              <select name="etat_operationnel" value={form.etat_operationnel} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary">
-                <option value="FONCTIONNEL">Fonctionnel</option>
-                <option value="FONCTIONNEL_SOUS_SURVEILLANCE">Fonctionnel sous surveillance</option>
-                <option value="EN_PANNE">En panne</option>
-                <option value="EN_MAINTENANCE">En maintenance</option>
-                <option value="EN_ATTENTE_PIECE_OU_PRESTATAIRE">En attente</option>
-                <option value="HORS_SERVICE">Hors service</option>
-                <option value="REFORME">Réformé</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-on-surface mb-1">Criticité</label>
-              <select name="niveau_criticite" value={form.niveau_criticite} onChange={handleChange}
-                className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface focus:ring-2 focus:ring-primary">
-                <option value="FAIBLE">Faible</option>
-                <option value="MOYEN">Moyen</option>
-                <option value="ELEVE">Élevé</option>
-                <option value="CRITIQUE">Critique</option>
-              </select>
-            </div>
-          </div>
+      {activeTab === 'preventive' && (
+        <div className="card p-8 text-center">
+          <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+          <p className="text-sm text-slate-500">Maintenance préventive non configurée pour cet équipement.</p>
         </div>
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full py-3 px-4 rounded-lg text-sm font-bold text-on-primary bg-primary hover:bg-primary-container focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all disabled:opacity-50"
-        >
-          {isSubmitting ? 'Enregistrement...' : isCreate ? 'Créer l\'équipement' : 'Enregistrer les modifications'}
-        </button>
-      </form>
+      )}
     </div>
   )
 }

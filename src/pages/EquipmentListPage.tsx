@@ -1,109 +1,137 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import { Plus, Eye, Download } from 'lucide-react'
 import { equipmentApi } from '@/services/equipment'
-import type { Equipment } from '@/types/equipment'
+import type { Equipment, Service } from '@/types/equipment'
+import { StatusBadge, CriticalityBadge } from '@/components/ui/StatusBadge'
+import SearchInput from '@/components/ui/SearchInput'
+import PageHeader from '@/components/ui/PageHeader'
+import { ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
 
-const STATUT_COLORS: Record<string, string> = {
-  FONCTIONNEL: 'bg-tertiary/10 text-tertiary border border-tertiary/30',
-  FONCTIONNEL_SOUS_SURVEILLANCE: 'bg-secondary-container text-on-secondary-fixed border border-secondary-container',
-  EN_PANNE: 'bg-error-container text-on-error-container border border-error-container',
-  EN_MAINTENANCE: 'bg-primary-fixed text-on-primary-fixed-variant border border-primary-fixed',
-  EN_ATTENTE_PIECE_OU_PRESTATAIRE: 'bg-surface-variant text-on-surface border border-surface-variant',
-  HORS_SERVICE: 'bg-surface-container-high text-on-surface-variant border border-outline-variant',
-  REFORME: 'bg-surface-container-high text-outline border border-outline-variant',
+function SkeletonRow() {
+  return (
+    <tr className="border-b border-slate-100">
+      <td className="px-4 py-3"><div className="h-4 bg-slate-100 rounded w-32 animate-pulse" /><div className="h-3 bg-slate-50 rounded w-24 mt-1 animate-pulse" /></td>
+      <td className="px-4 py-3"><div className="h-4 bg-slate-100 rounded w-20 animate-pulse" /></td>
+      <td className="px-4 py-3"><div className="h-5 bg-slate-100 rounded-full w-20 animate-pulse" /></td>
+      <td className="px-4 py-3"><div className="h-5 bg-slate-100 rounded-full w-16 animate-pulse" /></td>
+      <td className="px-4 py-3"><div className="h-4 bg-slate-100 rounded w-12 animate-pulse" /></td>
+    </tr>
+  )
 }
 
-const STATUT_LABELS: Record<string, string> = {
-  FONCTIONNEL: 'Fonctionnel',
-  FONCTIONNEL_SOUS_SURVEILLANCE: 'Sous surveillance',
-  EN_PANNE: 'En panne',
-  EN_MAINTENANCE: 'En maintenance',
-  EN_ATTENTE_PIECE_OU_PRESTATAIRE: 'En attente',
-  HORS_SERVICE: 'Hors service',
-  REFORME: 'Réformé',
-}
-
-const CRITICITE_COLORS: Record<string, string> = {
-  CRITIQUE: 'bg-error-container text-on-error-container',
-  ELEVE: 'bg-surface-variant text-on-surface',
-  MOYEN: 'bg-surface-container text-on-surface',
-  FAIBLE: 'bg-surface-container-high text-secondary',
+function exportCSV(items: Equipment[]) {
+  const headers = ['N° Inventaire', 'Nom', 'Type', 'Marque', 'Modèle', 'Service', 'Statut', 'Criticité']
+  const rows = items.map(e => [
+    e.num_inventaire, e.nom, e.type_equipement, e.marque, e.modele,
+    e.service_nom || '', e.etat_operationnel, e.niveau_criticite
+  ])
+  const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `parc-equipements-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export default function EquipmentListPage() {
-  const [equipment, setEquipment] = useState<Equipment[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [items, setItems] = useState<Equipment[]>([])
+  const [services, setServices] = useState<Service[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterCriticality, setFilterCriticality] = useState('')
+  const [filterService, setFilterService] = useState('')
 
-  useEffect(() => {
-    loadEquipment()
-  }, [])
-
-  const loadEquipment = async () => {
-    setIsLoading(true)
+  const fetchData = async () => {
     try {
-      const data = await equipmentApi.list()
-      setEquipment(data.results || data)
-    } catch (error) {
-      console.error('Erreur chargement équipements:', error)
+      setLoading(true)
+      const [eqData, svcData] = await Promise.all([equipmentApi.list(), equipmentApi.listServices()])
+      setItems(eqData)
+      setServices(svcData)
+      setError('')
+    } catch (err: any) {
+      setError(err.message || 'Erreur de chargement')
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const filtered = equipment.filter((eq) => {
-    const matchSearch = !search || eq.nom.toLowerCase().includes(search.toLowerCase()) ||
-      eq.num_inventaire.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = !filterStatus || eq.etat_operationnel === filterStatus
-    const matchCrit = !filterCriticality || eq.niveau_criticite === filterCriticality
-    return matchSearch && matchStatus && matchCrit
+  useEffect(() => { fetchData() }, [])
+
+  const filtered = items.filter((item) => {
+    const q = search.toLowerCase()
+    const matchSearch = !search ||
+      item.nom?.toLowerCase().includes(q) ||
+      item.num_inventaire?.toLowerCase().includes(q) ||
+      item.marque?.toLowerCase().includes(q) ||
+      item.num_serie?.toLowerCase().includes(q)
+    const matchStatus = !filterStatus || item.etat_operationnel === filterStatus
+    const matchCriticality = !filterCriticality || item.niveau_criticite === filterCriticality
+    const matchService = !filterService || String(item.service) === filterService
+    return matchSearch && matchStatus && matchCriticality && matchService
   })
 
-  return (
-    <div className="p-6 space-y-6 max-w-[1680px] mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-on-surface">Gestion du parc biomédical</h1>
-          <p className="text-sm text-on-surface-variant mt-1">
-            {equipment.length} dispositifs répertoriés
-          </p>
-        </div>
-        <Link
-          to="/equipment/new"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-on-primary font-semibold text-sm hover:bg-primary-container transition shadow-sm"
-        >
-          Ajouter un équipement
-        </Link>
-      </div>
+  const handleExport = useCallback(() => exportCSV(filtered), [filtered])
 
-      <div className="bg-surface-container-lowest p-4 rounded-xl shadow-sm space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <input
-            type="text"
-            placeholder="Rechercher..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="px-3 py-2.5 rounded-lg bg-surface-container-low text-on-surface placeholder:text-outline text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-3 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          >
+  if (loading) return (
+    <div className="space-y-6">
+      <PageHeader title="Parc biomédical" description="Chargement..." />
+      <div className="card p-4"><div className="h-10 bg-slate-100 rounded animate-pulse" /></div>
+      <div className="card overflow-hidden">
+        <table className="w-full">
+          <thead><tr className="border-b border-slate-200 bg-slate-50">
+            <th className="px-4 py-3"><div className="h-3 bg-slate-200 rounded w-16 animate-pulse" /></th>
+            <th className="px-4 py-3"><div className="h-3 bg-slate-200 rounded w-16 animate-pulse" /></th>
+            <th className="px-4 py-3"><div className="h-3 bg-slate-200 rounded w-16 animate-pulse" /></th>
+            <th className="px-4 py-3"><div className="h-3 bg-slate-200 rounded w-16 animate-pulse" /></th>
+            <th className="px-4 py-3"><div className="h-3 bg-slate-200 rounded w-16 animate-pulse" /></th>
+          </tr></thead>
+          <tbody>{[1,2,3,4,5].map(i => <SkeletonRow key={i} />)}</tbody>
+        </table>
+      </div>
+    </div>
+  )
+  if (error) return <ErrorState message={error} onRetry={fetchData} />
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Parc biomédical"
+        description={`${items.length} équipement${items.length > 1 ? 's' : ''} enregistré${items.length > 1 ? 's' : ''}`}
+        action={
+          <div className="flex items-center gap-2">
+            <button onClick={handleExport} className="btn-secondary text-xs" aria-label="Exporter en CSV">
+              <Download className="w-4 h-4" /> Export CSV
+            </button>
+            <Link to="/equipment/new" className="btn-primary">
+              <Plus className="w-4 h-4" /> Ajouter
+            </Link>
+          </div>
+        }
+      />
+
+      {/* Filters */}
+      <div className="card p-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <SearchInput value={search} onChange={setSearch} placeholder="Rechercher (nom, N°inv, marque, N° série)..." className="flex-1" />
+          <select value={filterService} onChange={(e) => setFilterService(e.target.value)} className="input w-full sm:w-48" aria-label="Filtrer par service">
+            <option value="">Tous les services</option>
+            {services.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
+          </select>
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input w-full sm:w-48" aria-label="Filtrer par statut">
             <option value="">Tous les statuts</option>
             <option value="FONCTIONNEL">Fonctionnel</option>
-            <option value="FONCTIONNEL_SOUS_SURVEILLANCE">Sous surveillance</option>
             <option value="EN_PANNE">En panne</option>
             <option value="EN_MAINTENANCE">En maintenance</option>
+            <option value="FONCTIONNEL_SOUS_SURVEILLANCE">Sous surveillance</option>
+            <option value="HORS_SERVICE">Hors service</option>
             <option value="REFORME">Réformé</option>
           </select>
-          <select
-            value={filterCriticality}
-            onChange={(e) => setFilterCriticality(e.target.value)}
-            className="px-3 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          >
+          <select value={filterCriticality} onChange={(e) => setFilterCriticality(e.target.value)} className="input w-full sm:w-48" aria-label="Filtrer par criticité">
             <option value="">Toutes les criticités</option>
             <option value="CRITIQUE">Critique</option>
             <option value="ELEVE">Élevé</option>
@@ -113,55 +141,72 @@ export default function EquipmentListPage() {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-12 text-on-surface-variant">Chargement...</div>
+      {filtered.length === 0 ? (
+        <EmptyState
+          title="Aucun équipement trouvé"
+          description={search || filterStatus || filterCriticality || filterService ? "Aucun équipement ne correspond aux filtres." : "Aucun équipement enregistré."}
+          action={(search || filterStatus || filterCriticality || filterService) ? (
+            <button onClick={() => { setSearch(''); setFilterStatus(''); setFilterCriticality(''); setFilterService('') }} className="btn-secondary text-xs">
+              Réinitialiser les filtres
+            </button>
+          ) : undefined}
+        />
       ) : (
-        <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-surface-container-low text-on-surface-variant text-xs uppercase tracking-wider">
-                <th className="py-3 px-4">Équipement</th>
-                <th className="py-3 px-4">Service</th>
-                <th className="py-3 px-4">Statut</th>
-                <th className="py-3 px-4">Criticité</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-container">
-              {filtered.map((eq) => (
-                <tr key={eq.id} className="hover:bg-surface-container-low/60 transition-colors">
-                  <td className="py-3 px-4">
-                    <div className="font-semibold text-on-surface text-sm">{eq.nom}</div>
-                    <div className="text-xs text-on-surface-variant font-mono mt-0.5">
-                      {eq.num_inventaire} • {eq.marque}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-on-surface">
-                    {eq.service_nom || '—'}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${STATUT_COLORS[eq.etat_operationnel] || ''}`}>
-                      {STATUT_LABELS[eq.etat_operationnel] || eq.etat_operationnel}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold ${CRITICITE_COLORS[eq.niveau_criticite] || ''}`}>
-                      {eq.niveau_criticite}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <Link
-                      to={`/equipment/${eq.id}`}
-                      className="text-primary hover:text-primary-container text-sm font-semibold"
-                    >
-                      Voir
-                    </Link>
-                  </td>
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block card overflow-hidden">
+            <table className="w-full text-left" aria-label="Liste des équipements">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide" scope="col">Équipement</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide" scope="col">Service</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide" scope="col">Statut</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide" scope="col">Criticité</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide" scope="col">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors min-h-[56px]">
+                    <td className="px-4 py-3.5">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{item.nom}</p>
+                        <p className="mono mt-0.5">{item.num_inventaire}</p>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-sm text-slate-600">{item.service_nom || '—'}</td>
+                    <td className="px-4 py-3.5"><StatusBadge status={item.etat_operationnel} /></td>
+                    <td className="px-4 py-3.5"><CriticalityBadge level={item.niveau_criticite} /></td>
+                    <td className="px-4 py-3.5">
+                      <Link to={`/equipment/${item.id}`} className="btn-ghost text-xs" aria-label={`Voir ${item.nom}`}>
+                        <Eye className="w-4 h-4" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {filtered.map((item) => (
+              <Link key={item.id} to={`/equipment/${item.id}`} className="card-hover block p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900 truncate">{item.nom}</p>
+                    <p className="mono mt-0.5">{item.num_inventaire}</p>
+                    <p className="text-xs text-slate-500 mt-1">{item.service_nom || '—'}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <StatusBadge status={item.etat_operationnel} />
+                    <CriticalityBadge level={item.niveau_criticite} />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

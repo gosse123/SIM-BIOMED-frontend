@@ -1,3 +1,141 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  html {
+    font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-app-bg text-slate-700 text-sm leading-relaxed;
+  }
+
+  h1 {
+    @apply font-display font-bold text-2xl tracking-tight text-slate-900;
+  }
+
+  h2 {
+    @apply font-display font-semibold text-lg text-slate-900;
+  }
+
+  h3 {
+    @apply font-display font-semibold text-base text-slate-900;
+  }
+}
+
+@layer components {
+  .badge {
+    @apply inline-flex items-center gap-1 font-medium text-xs tracking-wide rounded px-2 py-0.5;
+  }
+
+  .badge-critical {
+    @apply badge bg-red-50 text-red-700 font-semibold;
+  }
+
+  .badge-warning {
+    @apply badge bg-amber-50 text-amber-700 font-semibold;
+  }
+
+  .badge-functional {
+    @apply badge text-emerald-700 font-medium;
+  }
+
+  .badge-intervention {
+    @apply badge bg-blue-50 text-blue-700 font-semibold;
+  }
+
+  .badge-archived {
+    @apply badge text-slate-500;
+  }
+
+  .mono {
+    @apply font-mono text-xs font-semibold tracking-wider text-slate-600;
+  }
+
+  .card {
+    @apply bg-white rounded-lg border border-slate-200/80 shadow-card;
+  }
+
+  .card-hover {
+    @apply card hover:shadow-card-hover hover:border-slate-300/80 transition-all duration-150;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-semibold text-sm rounded-lg px-4 py-2.5 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-medical-primary text-white hover:bg-medical-hover focus-visible:ring-medical-primary;
+  }
+
+  .btn-secondary {
+    @apply btn bg-slate-100 text-slate-700 hover:bg-slate-200 focus-visible:ring-slate-400;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500;
+  }
+
+  .btn-ghost {
+    @apply btn text-slate-600 hover:bg-slate-100 focus-visible:ring-slate-400;
+  }
+
+  .input {
+    @apply w-full px-3 py-2.5 text-sm border border-slate-300 rounded-lg bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-medical-primary focus:border-medical-primary transition-colors;
+  }
+
+  .input-label {
+    @apply block text-xs font-semibold text-slate-700 mb-1;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2.5 text-sm border border-slate-300 rounded-lg bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-medical-primary focus:border-medical-primary transition-colors;
+  }
+
+  .sr-only {
+    @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap;
+  }
+
+  .skip-nav {
+    @apply sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:bg-sky-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-semibold;
+  }
+}
+
+@keyframes toastProgress {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@keyframes ecgPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.25s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-in {
+  animation: fadeIn 0.15s ease-out;
+}

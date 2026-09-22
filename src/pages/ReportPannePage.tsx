@@ -3,6 +3,10 @@ import { useNavigate, Link } from 'react-router-dom'
 import { panneApi } from '@/services/panne'
 import { equipmentApi } from '@/services/equipment'
 import type { Equipment } from '@/types/equipment'
+import { LoadingState } from '@/components/ui/FeedbackStates'
+import PageHeader from '@/components/ui/PageHeader'
+import { toast } from '@/components/ui/Toast'
+import { AlertTriangle, Save } from 'lucide-react'
 
 export default function ReportPannePage() {
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
@@ -15,7 +19,7 @@ export default function ReportPannePage() {
 
   useEffect(() => {
     equipmentApi.list()
-      .then((data) => setEquipmentList(data.results || data))
+      .then((data) => setEquipmentList(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setIsLoading(false))
   }, [])
@@ -25,10 +29,12 @@ export default function ReportPannePage() {
     setError('')
     setIsSubmitting(true)
     try {
-      const result = await panneApi.report({
-        equipement: Number(selectedEquipment),
-        description_signalement: description,
-      })
+      const result = await panneApi.report({ equipement: Number(selectedEquipment), description_signalement: description })
+      if ((result as unknown as Record<string, unknown>)._offline) {
+        toast('info', 'Panne enregistrée hors-ligne. Elle sera synchronisée dès la reconnexion.')
+      } else {
+        toast('success', 'Panne signalée avec succès')
+      }
       navigate(`/failures/${result.id}`)
     } catch {
       setError("Erreur lors du signalement. Vérifiez les champs.")
@@ -37,80 +43,60 @@ export default function ReportPannePage() {
     }
   }
 
+  if (isLoading) return <LoadingState />
+
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-6">
-      <div className="text-sm text-on-surface-variant mb-2">
-        <Link to="/failures" className="hover:text-primary">Pannes</Link>
-        <span className="mx-2">/</span>
-        <span className="text-on-surface font-semibold">Signaler une panne</span>
+    <div className="space-y-6 max-w-2xl">
+      <PageHeader
+        title="Signaler une panne"
+        breadcrumbs={[{ label: 'Pannes', href: '/failures' }, { label: 'Signaler' }]}
+      />
+
+      <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-xs text-red-700">
+            <strong className="font-semibold">Signalement :</strong> L'état initial sera <strong>SIGNALEE</strong>. La qualification est requise avant toute autre action.
+          </p>
+        </div>
       </div>
 
-      <div className="bg-error/5 border-l-4 border-error p-4 rounded-r-lg">
-        <p className="text-xs text-on-surface font-medium">
-          <strong className="font-semibold text-error">Signalement de panne :</strong>{' '}
-          L'état initial sera <strong>SIGNALEE</strong>. La qualification est ensuite requise avant toute autre action.
-        </p>
-      </div>
-
-      <h1 className="text-2xl font-bold text-on-surface">Signaler une panne</h1>
-
-      <form onSubmit={handleSubmit} className="bg-surface-container-lowest rounded-xl p-6 shadow-sm space-y-4">
+      <form onSubmit={handleSubmit} className="card p-6 space-y-4">
         {error && (
-          <div className="bg-error-container text-on-error-container p-3 rounded-lg text-sm">{error}</div>
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm" role="alert">{error}</div>
         )}
 
         <div>
-          <label className="block text-xs font-semibold text-on-surface mb-1">Équipement défectueux *</label>
-          {isLoading ? (
-            <div className="text-sm text-on-surface-variant">Chargement...</div>
-          ) : equipmentList.length === 0 ? (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
-              <p className="font-semibold mb-1">Aucun équipement enregistré</p>
-              <p className="text-amber-700">
-                Vous devez d'abord ajouter des équipements au parc avant de pouvoir signaler une panne.
-              </p>
-              <Link to="/equipment" className="inline-block mt-2 text-amber-900 font-semibold underline hover:text-amber-950">
-                → Aller à la gestion du parc
+          <label htmlFor="equipment" className="input-label">Équipement défectueux *</label>
+          {equipmentList.length === 0 ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm">
+              <p className="font-semibold text-amber-800 mb-1">Aucun équipement enregistré</p>
+              <p className="text-amber-700">Ajoutez des équipements au parc avant de signaler une panne.</p>
+              <Link to="/equipment" className="text-amber-900 font-semibold underline hover:text-amber-950 mt-2 inline-block">
+                → Gestion du parc
               </Link>
             </div>
           ) : (
-            <select
-              value={selectedEquipment}
-              onChange={(e) => setSelectedEquipment(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface-container-lowest text-on-surface focus:ring-2 focus:ring-primary"
-              required
-            >
+            <select id="equipment" value={selectedEquipment} onChange={(e) => setSelectedEquipment(e.target.value)} className="input" required>
               <option value="">Sélectionner un équipement</option>
               {equipmentList.map((eq) => (
-                <option key={eq.id} value={eq.id}>
-                  {eq.nom} ({eq.num_inventaire})
-                </option>
+                <option key={eq.id} value={eq.id}>{eq.nom} ({eq.num_inventaire})</option>
               ))}
             </select>
           )}
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-on-surface mb-1">
-            Description de la panne *
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={5}
-            className="w-full px-3 py-2.5 text-sm border border-outline rounded-lg bg-surface-container-lowest text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary"
-            placeholder="Décrivez le problème observé..."
-            required
-          />
+          <label htmlFor="description" className="input-label">Description de la panne *</label>
+          <textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows={5} className="input" placeholder="Décrivez le problème observé..." required />
         </div>
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full py-3 px-4 rounded-lg text-sm font-bold text-on-error bg-error hover:bg-error/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-error transition-all disabled:opacity-50"
-        >
-          {isSubmitting ? 'Envoi en cours...' : 'Signaler la panne'}
-        </button>
+        <div className="flex justify-end pt-4 border-t border-slate-200">
+          <button type="submit" disabled={isSubmitting || !selectedEquipment || !description} className="btn-danger">
+            <Save className="w-4 h-4" />
+            {isSubmitting ? 'Envoi...' : 'Signaler la panne'}
+          </button>
+        </div>
       </form>
     </div>
   )

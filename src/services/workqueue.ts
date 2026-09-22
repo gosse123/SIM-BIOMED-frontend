@@ -1,4 +1,8 @@
 import api from './api'
+import { put, getAll } from './db'
+import { network } from './network'
+
+const CACHE_TTL = 10 * 60 * 1000
 
 export interface WorkQueueStats {
   total_ouvertes: number
@@ -20,7 +24,17 @@ export interface WorkQueueItem {
 
 export const workqueueApi = {
   get: async (): Promise<WorkQueueStats> => {
-    const { data } = await api.get('/workqueue/')
-    return data
+    if (network.isOnline()) {
+      try {
+        const { data } = await api.get('/workqueue/')
+        await put('workqueue', 'workqueue-stats', data, CACHE_TTL)
+        return data
+      } catch {
+        const cached = await getAll<WorkQueueStats>('workqueue')
+        return cached.length > 0 ? cached[0] : { total_ouvertes: 0, par_statut: {}, par_criticite: {}, pannes: [] }
+      }
+    }
+    const cached = await getAll<WorkQueueStats>('workqueue')
+    return cached.length > 0 ? cached[0] : { total_ouvertes: 0, par_statut: {}, par_criticite: {}, pannes: [] }
   },
 }

@@ -38,8 +38,8 @@ export const STATUT_INTERVENTION_LABELS: Record<StatutIntervention, string> = {
 }
 
 export const STATUT_INTERVENTION_COLORS: Record<StatutIntervention, string> = {
-  PLANIFIEE: 'bg-surface-variant text-on-surface border border-outline-variant',
-  EN_COURS: 'bg-primary-fixed text-on-primary-fixed-variant border border-primary/20',
-  TERMINEE: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
-  ANNULEE: 'bg-surface-container-high text-outline border border-outline-variant',
+  PLANIFIEE: 'bg-slate-100 text-slate-700 border border-slate-200',
+  EN_COURS: 'bg-sky-50 text-sky-700 border border-sky-200',
+  TERMINEE: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  ANNULEE: 'bg-slate-100 text-slate-500 border border-slate-200',
 }
