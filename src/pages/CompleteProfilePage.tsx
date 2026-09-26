@@ -5,11 +5,9 @@ import { profileApi } from '@/services/api'
 import { Building2, CreditCard, Briefcase, CheckCircle2, Lock } from 'lucide-react'
 
 export default function CompleteProfilePage() {
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const [etablissements, setEtablissements] = useState<Array<{ id: number; nom: string }>>([])
   const [matricule, setMatricule] = useState('')
-  const [etablissementId, setEtablissementId] = useState<number | ''>('')
   const [service, setService] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -20,20 +18,13 @@ export default function CompleteProfilePage() {
   useEffect(() => {
     const checkProfile = async () => {
       try {
-        const [profileData, etabs] = await Promise.all([
-          profileApi.checkComplete(),
-          profileApi.getEtablissements(),
-        ])
-        setEtablissements(etabs)
+        const profileData = await profileApi.checkComplete()
         if (profileData.profil_complete) {
           navigate('/', { replace: true })
           return
         }
-        if (etabs.length === 1) {
-          setEtablissementId(etabs[0].id)
-        }
       } catch {
-        // silent
+        // silencieux
       } finally {
         setFetching(false)
       }
@@ -43,7 +34,7 @@ export default function CompleteProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!matricule.trim() || !etablissementId || !newPassword) return
+    if (!matricule.trim() || !newPassword) return
     if (newPassword !== confirmPassword) {
       setError('Les mots de passe ne correspondent pas.')
       return
@@ -53,7 +44,6 @@ export default function CompleteProfilePage() {
     try {
       const result = await profileApi.complete({
         matricule: matricule.trim(),
-        etablissement: etablissementId as number,
         service: service.trim() || undefined,
         new_password: newPassword,
       })
@@ -117,25 +107,13 @@ export default function CompleteProfilePage() {
             </div>
 
             <div>
-              <label htmlFor="etablissement" className="input-label flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5" /> Établissement *
-              </label>
-              {etablissements.length === 1 ? (
-                <div className="input-field bg-slate-50 text-slate-700">{etablissements[0].nom}</div>
-              ) : (
-                <select
-                  id="etablissement"
-                  className="input-field"
-                  required
-                  value={etablissementId}
-                  onChange={(e) => setEtablissementId(Number(e.target.value))}
-                >
-                  <option value="">Sélectionner un établissement</option>
-                  {etablissements.map((e) => (
-                    <option key={e.id} value={e.id}>{e.nom}</option>
-                  ))}
-                </select>
-              )}
+              <span className="input-label flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5" /> Établissement
+              </span>
+              {/* Attribué par l'administrateur — jamais modifiable par l'utilisateur */}
+              <div className="input-field bg-slate-50 text-slate-700">
+                {user?.etablissement_nom ?? 'Attribué par votre administrateur'}
+              </div>
             </div>
 
             <div>
@@ -192,7 +170,7 @@ export default function CompleteProfilePage() {
 
             <button
               type="submit"
-              disabled={loading || !matricule.trim() || !etablissementId || !newPassword || newPassword !== confirmPassword}
+              disabled={loading || !matricule.trim() || !newPassword || newPassword !== confirmPassword}
               className="btn-primary w-full mt-2"
             >
               {loading ? (

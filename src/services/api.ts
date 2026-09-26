@@ -4,7 +4,7 @@ import type { LoginResponse, User } from '@/types/auth'
 import type { DemandeAcces, Notification } from '@/types/demandes'
 import { network } from './network'
 import { addToSyncQueue, getSyncQueue, updateSyncEntry, removeSyncEntry } from './db'
-import { addPendingEntity, setReconciledId, getPendingEntityByOfflineId, removePendingEntity } from './db'
+import { addPendingEntity, setReconciledId, getPendingEntityByOfflineId, removePendingEntity, getAllReconciledIds } from './db'
 import { put } from './db'
 
 const api = axios.create({
@@ -116,6 +116,40 @@ export async function offlineAwareRequest<T>(
 }
 
 /**
+ * Réécrit les références aux identifiants temporaires (négatifs) remplacées
+ * par des identifiants réels après réconciliation — URL et corps des
+ * entrées dépendantes (règle §7 de la revue hors-ligne).
+ */
+export async function rewriteDependentEntry(
+  entry: { url: string; body?: unknown }
+): Promise<{ url: string; body?: unknown }> {
+  const reconciled = await getAllReconciledIds()
+  if (reconciled.size === 0) return entry
+
+  // Réécriture de l'URL : segments de chemin égaux à un tempId
+  let url = entry.url
+  for (const [tempId, realId] of reconciled) {
+    url = url.replace(new RegExp(`/${tempId}(?=/|$)`), `/${realId}`)
+  }
+
+  // Réécriture du corps : valeurs exactement égales à un tempId (récursif)
+  const rewriteValue = (value: unknown): unknown => {
+    if (typeof value === 'number' && reconciled.has(value)) {
+      return reconciled.get(value)
+    }
+    if (Array.isArray(value)) return value.map(rewriteValue)
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, rewriteValue(v)])
+      )
+    }
+    return value
+  }
+
+  return { url, body: entry.body !== undefined ? rewriteValue(entry.body) : entry.body }
+}
+
+/**
  * Process the sync queue when back online.
  * Returns results of each synced operation.
  */
@@ -136,10 +170,13 @@ export async function processSyncQueue(): Promise<
     try {
       await updateSyncEntry({ ...entry, syncStatus: 'syncing' })
 
+      // Réécrire les références aux IDs temporaires avant envoi (opérations dépendantes)
+      const rewritten = await rewriteDependentEntry(entry)
+
       const response = await api({
         method: entry.method.toLowerCase(),
-        url: entry.url,
-        data: entry.body,
+        url: rewritten.url,
+        data: rewritten.body,
         headers: {
           ...entry.headers,
           'X-Offline-Id': entry.id,
@@ -300,7 +337,7 @@ export const profileApi = {
     return data
   },
 
-  complete: async (data: { matricule: string; etablissement: number; service?: string; new_password: string }): Promise<{ detail: string; user: User }> => {
+  complete: async (data: { matricule: string; service?: string; new_password: string }): Promise<{ detail: string; user: User }> => {
     const { data: resp } = await api.post('/auth/complete-profile/', data)
     return resp
   },

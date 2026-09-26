@@ -1,6 +1,6 @@
 /**
- * Sync engine: manages offline queue processing,
- * automatic sync on reconnect, and manual force sync.
+ * Moteur de synchronisation : traite la file hors ligne,
+ * synchronisation automatique au retour réseau et sync forcée manuelle.
  */
 import { network } from './network'
 import { processSyncQueue } from './api'
@@ -18,7 +18,7 @@ class SyncEngine {
   private _syncInterval: ReturnType<typeof setInterval> | null = null
 
   constructor() {
-    // Auto-sync when coming back online
+    // Synchronisation automatique au retour réseau
     network.onChange((isOnline) => {
       if (isOnline) {
         this.sync()
@@ -27,12 +27,12 @@ class SyncEngine {
       }
     })
 
-    // Initial check
+    // Vérification initiale
     if (!network.isOnline()) {
       this._status = 'offline'
     }
 
-    // Periodic sync attempt (every 30s when online)
+    // Tentative périodique de synchronisation (toutes les 30 s en ligne)
     this._syncInterval = setInterval(() => {
       if (network.isOnline() && this._pendingCount > 0 && !this._isProcessing) {
         this.sync()
@@ -55,7 +55,7 @@ class SyncEngine {
         this.notify()
       }
     } catch {
-      // silent
+      // silencieux
     }
   }
 
@@ -64,7 +64,7 @@ class SyncEngine {
       try {
         cb(this._status, this._pendingCount)
       } catch {
-        // silent
+        // silencieux
       }
     }
   }
@@ -78,8 +78,8 @@ class SyncEngine {
   }
 
   /**
-   * Force sync (admin only).
-   * Also called automatically on reconnect.
+   * Synchronisation forcée (admin uniquement).
+   * Appelée aussi automatiquement au retour réseau.
    */
   async sync(): Promise<{ synced: number; errors: number }> {
     if (this._isProcessing) return { synced: 0, errors: 0 }
@@ -100,7 +100,7 @@ class SyncEngine {
         this.setStatus('error')
       } else {
         this.setStatus('synced')
-        // Reset to idle after 3 seconds
+        // Retour au repos après 3 secondes
         setTimeout(() => {
           if (this._status === 'synced') {
             this.setStatus('idle')
@@ -119,12 +119,12 @@ class SyncEngine {
   }
 
   /**
-   * Subscribe to status changes.
-   * Returns unsubscribe function.
+   * Abonnement aux changements de statut.
+   * Retourne la fonction de désabonnement.
    */
   onStatusChange(callback: StatusCallback): () => void {
     this._listeners.add(callback)
-    // Fire immediately with current state
+    // Émission immédiate avec l'état courant
     callback(this._status, this._pendingCount)
     return () => this._listeners.delete(callback)
   }

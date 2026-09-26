@@ -71,5 +71,7 @@ export function canViewDashboard(user: User | null): boolean {
 }
 
 export function canViewIndicators(user: User | null): boolean {
-  return hasRole(user, 'DIRECTION')
+  // Aligné sur IsDirection côté backend : ADMINISTRATEUR et DIRECTION uniquement.
+  // (Le serveur reste l'autorité — ce helper ne sert qu'à l'affichage.)
+  return !!user && ['ADMINISTRATEUR', 'DIRECTION'].includes(user.role)
 }

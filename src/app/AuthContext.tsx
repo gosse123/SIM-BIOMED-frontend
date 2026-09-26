@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import type { User } from '@/types/auth'
 import { authApi } from '@/services/api'
+import { purgeAllLocalData } from '@/services/db'
 
 interface AuthContextType {
   user: User | null
@@ -58,6 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     authApi.logout()
+    // Purge du stockage local et de la file de sync pour éviter toute
+    // fuite de données entre utilisateurs (règle §6 de la revue hors-ligne)
+    purgeAllLocalData().catch(() => { /* silencieux : purge au mieux */ })
     setUser(null)
   }
 

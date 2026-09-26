@@ -247,3 +247,42 @@ export async function getReconciledId(tempId: number): Promise<number | null> {
 export async function setReconciledId(tempId: number, realId: number): Promise<void> {
   await put('pending-entities', `reconciled-${tempId}`, { realId }, Infinity)
 }
+
+/**
+ * Retourne tous les mappings tempId → realId réconciliés,
+ * pour réécrire les opérations dépendantes encore en file.
+ */
+export async function getAllReconciledIds(): Promise<Map<number, number>> {
+  const db = await openDB()
+  const entries = await new Promise<Array<{ key: string; data: { realId: number } }>>((resolve, reject) => {
+    const tx = db.transaction('pending-entities', 'readonly')
+    const store = tx.objectStore('pending-entities')
+    const request = store.getAll() as IDBRequest<Array<{ key: string; data: { realId: number } }>>
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+  const map = new Map<number, number>()
+  for (const e of entries) {
+    if (e.key.startsWith('reconciled-')) {
+      map.set(Number(e.key.replace('reconciled-', '')), e.data.realId)
+    }
+  }
+  return map
+}
+
+/**
+ * Purge complète du stockage local (à la déconnexion) :
+ * vide tous les stores, y compris la file de synchronisation,
+ * pour éviter toute fuite de données entre utilisateurs (§6).
+ */
+export async function purgeAllLocalData(): Promise<void> {
+  const db = await openDB()
+  for (const store of STORES) {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(store, 'readwrite')
+      const request = tx.objectStore(store).clear()
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+}

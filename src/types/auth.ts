@@ -9,6 +9,7 @@ export interface User {
   is_active: boolean
   profil_complete: boolean
   etablissement?: number | null
+  etablissement_nom?: string | null
 }
 
 export interface AuthTokens {
