@@ -12,6 +12,8 @@ import PannesListPage from '@/pages/PannesListPage'
 import ReportPannePage from '@/pages/ReportPannePage'
 import PanneDetailPage from '@/pages/PanneDetailPage'
 import InterventionsListPage from '@/pages/InterventionsListPage'
+import InterventionFormPage from '@/pages/InterventionFormPage'
+import InterventionDetailPage from '@/pages/InterventionDetailPage'
 import WorkQueuePage from '@/pages/WorkQueuePage'
 import PreventivePage from '@/pages/PreventivePage'
 import IndicateursPage from '@/pages/IndicateursPage'
@@ -62,6 +64,8 @@ function AppRoutes() {
         <Route path="/failures/new" element={<ReportPannePage />} />
         <Route path="/failures/:id" element={<PanneDetailPage />} />
         <Route path="/interventions" element={<InterventionsListPage />} />
+        <Route path="/interventions/new" element={<InterventionFormPage />} />
+        <Route path="/interventions/:id" element={<InterventionDetailPage />} />
         <Route path="/workqueue" element={<WorkQueuePage />} />
         <Route path="/preventive" element={<PreventivePage />} />
         <Route path="/indicators" element={<IndicateursPage />} />

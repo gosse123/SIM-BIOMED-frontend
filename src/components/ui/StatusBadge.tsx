@@ -23,6 +23,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   PLANIFIEE: { label: 'Planifiée', className: 'badge-intervention' },
   EN_COURS: { label: 'En cours', className: 'badge-intervention' },
   TERMINEE: { label: 'Terminée', className: 'text-emerald-700 font-medium' },
+  ANNULEE: { label: 'Annulée', className: 'text-slate-500 line-through' },
   CONFORME: { label: 'Conforme', className: 'text-emerald-700 font-medium' },
   SOUS_SURVEILLANCE: { label: 'Sous surveillance', className: 'badge-warning' },
   NON_CONFORME: { label: 'Non conforme', className: 'badge-critical' },

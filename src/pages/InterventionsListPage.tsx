@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { interventionApi } from '@/services/intervention'
 import type { Intervention } from '@/types/intervention'
-import { TYPE_INTERVENTION_LABELS } from '@/types/intervention'
+import { TYPE_INTERVENTION_LABELS, STATUT_INTERVENTION_LABELS } from '@/types/intervention'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
@@ -15,6 +15,7 @@ export default function InterventionsListPage() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('')
+  const [filterStatut, setFilterStatut] = useState('')
 
   const fetchData = async () => {
     setLoading(true)
@@ -34,7 +35,8 @@ export default function InterventionsListPage() {
   const filtered = interventions.filter((i) => {
     const matchSearch = !search || i.equipement_nom?.toLowerCase().includes(search.toLowerCase())
     const matchType = !filterType || i.type_intervention === filterType
-    return matchSearch && matchType
+    const matchStatut = !filterStatut || i.statut === filterStatut
+    return matchSearch && matchType && matchStatut
   })
 
   if (loading) return <LoadingState />
@@ -55,12 +57,17 @@ export default function InterventionsListPage() {
       <div className="card p-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <SearchInput value={search} onChange={setSearch} placeholder="Rechercher..." className="flex-1" />
-          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input w-full sm:w-48" aria-label="Filtrer par type">
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input w-full sm:w-44" aria-label="Filtrer par type">
             <option value="">Tous les types</option>
-            <option value="CORRECTIVE">Corrective</option>
-            <option value="PREVENTIVE">Préventive</option>
-            <option value="PREDICTIVE">Prédictive</option>
-            <option value="INSTALLATION">Installation</option>
+            {(Object.entries(TYPE_INTERVENTION_LABELS) as [string, string][]).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <select value={filterStatut} onChange={(e) => setFilterStatut(e.target.value)} className="input w-full sm:w-44" aria-label="Filtrer par statut">
+            <option value="">Tous les statuts</option>
+            {(Object.entries(STATUT_INTERVENTION_LABELS) as [string, string][]).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
           </select>
         </div>
       </div>

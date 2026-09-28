@@ -49,6 +49,7 @@ export const interventionApi = {
     type_intervention: string
     description: string
     pieces_utilisees?: string
+    hors_service_total?: boolean
   }): Promise<Intervention> => {
     const { data } = await offlineAwareRequest<Intervention>('post', '/interventions/', payload)
     return data
@@ -59,8 +60,16 @@ export const interventionApi = {
     return data
   },
 
-  finish: async (id: number, payload: { temps_passe_minutes: number; pieces_utilisees?: string }): Promise<Intervention> => {
+  finish: async (
+    id: number,
+    payload: { temps_passe_minutes: number; pieces_utilisees?: string; repare_totalement?: boolean },
+  ): Promise<Intervention> => {
     const { data } = await offlineAwareRequest<Intervention>('post', `/interventions/${id}/finish/`, payload)
+    return data
+  },
+
+  cancel: async (id: number): Promise<Intervention> => {
+    const { data } = await offlineAwareRequest<Intervention>('post', `/interventions/${id}/cancel/`, {})
     return data
   },
 }
