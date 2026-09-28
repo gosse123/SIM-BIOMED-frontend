@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '@/app/AuthContext'
 import { workqueueApi, type WorkQueueStats, type WorkQueueItem } from '@/services/workqueue'
 import { panneApi } from '@/services/panne'
+import { equipmentApi } from '@/services/equipment'
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
 import { toast } from '@/components/ui/toast'
@@ -11,10 +13,11 @@ import CriticiteModal from '@/components/panne/CriticiteModal'
 import DiagnosticModal from '@/components/panne/DiagnosticModal'
 import TestResultModal from '@/components/panne/TestResultModal'
 import ConfirmActionModal from '@/components/panne/ConfirmActionModal'
+import QrScanner, { type QrEquipmentData } from '@/components/QrScanner'
 import {
   AlertTriangle, PhoneCall, Clock, ShieldAlert, Users,
   Smartphone, ChevronRight, Play, Wrench,
-  CheckCircle2, Package, Truck
+  CheckCircle2, Package, Truck, UserCheck
 } from 'lucide-react'
 
 const CRITICITE_COLORS: Record<string, string> = {
@@ -54,34 +57,49 @@ const STATUT_COLORS: Record<string, string> = {
   EN_ATTENTE_PRESTATAIRE: 'bg-indigo-100 text-indigo-700 border border-indigo-200',
 }
 
-// Transitions valides par statut (d'après le modèle backend)
-function getTransitions(statut: string): string[] {
-  const map: Record<string, string[]> = {
-    SIGNALEE: ['QUALIFIEE'],
-    QUALIFIEE: ['CRITICITE_EVALUEE', 'CLOSE'],
-    CRITICITE_EVALUEE: ['EN_DIAGNOSTIC'],
-    EN_DIAGNOSTIC: ['EN_INTERVENTION', 'EN_ATTENTE_PIECE', 'EN_ATTENTE_PRESTATAIRE'],
-    EN_INTERVENTION: ['EN_TEST'],
-    EN_TEST: ['CLOSE', 'EN_INTERVENTION', 'EN_ATTENTE_PIECE', 'EN_ATTENTE_PRESTATAIRE'],
-    EN_ATTENTE_PIECE: ['EN_INTERVENTION'],
-    EN_ATTENTE_PRESTATAIRE: ['EN_INTERVENTION'],
-  }
-  return map[statut] || []
+// Repli hors-ligne si la réponse serveur ne porte pas les transitions
+// (cache ancien) — la carte d'origine reste la source : `transitions_valides`.
+const FALLBACK_TRANSITIONS: Record<string, string[]> = {
+  SIGNALEE: ['QUALIFIEE'],
+  QUALIFIEE: ['CRITICITE_EVALUEE'],
+  CRITICITE_EVALUEE: ['EN_DIAGNOSTIC'],
+  EN_DIAGNOSTIC: ['EN_INTERVENTION', 'EN_ATTENTE_PIECE', 'EN_ATTENTE_PRESTATAIRE'],
+  EN_INTERVENTION: ['EN_TEST'],
+  EN_TEST: ['CLOSE', 'EN_DIAGNOSTIC', 'EN_ATTENTE_PIECE', 'EN_ATTENTE_PRESTATAIRE'],
+  EN_ATTENTE_PIECE: ['EN_INTERVENTION'],
+  EN_ATTENTE_PRESTATAIRE: ['EN_INTERVENTION'],
 }
 
-const TECHNICIENS = [
-  { nom: 'Ing. Léa Dubois', role: 'Responsable', charge: 95, avatar: 'LD' },
-  { nom: 'Tech. Marc Vella', role: 'Technicien', charge: 60, avatar: 'MV' },
-  { nom: 'Tech. Sarah Chen', role: 'Technicien', charge: 35, avatar: 'SC' },
-]
+function getTransitions(panne: WorkQueueItem): string[] {
+  return panne.transitions_valides ?? FALLBACK_TRANSITIONS[panne.statut] ?? []
+}
+
+const initiales = (nom?: string | null) =>
+  (nom || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((m) => m[0])
+    .join('')
+    .toUpperCase()
 
 type ModalType = 'qualify' | 'criticite' | 'diagnostic' | 'test' | 'confirm' | null
 
+type CriticiteFilter = 'ALL' | 'CRITIQUE' | 'ELEVE' | 'MOYEN' | 'FAIBLE'
+
+const PAGE_SIZE = 6
+
 export default function WorkQueuePage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [stats, setStats] = useState<WorkQueueStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // Filtres de la file (RB-PR-004 : file ordonnée et filtrable)
+  const [criticiteFilter, setCriticiteFilter] = useState<CriticiteFilter>('ALL')
+  const [affectationFilter, setAffectationFilter] = useState<string>('ALL')
+  const [page, setPage] = useState(1)
+  const [showScanner, setShowScanner] = useState(false)
   // Modal state
   const [activeModal, setActiveModal] = useState<ModalType>(null)
   const [selectedPanne, setSelectedPanne] = useState<WorkQueueItem | null>(null)
@@ -102,6 +120,8 @@ export default function WorkQueuePage() {
 
   useEffect(() => { fetchData() }, [])
 
+  useEffect(() => { setPage(1) }, [criticiteFilter, affectationFilter])
+
   const executeTransition = useCallback(async (_id: number, fn: () => Promise<unknown>) => {
     try {
       await fn()
@@ -121,8 +141,33 @@ export default function WorkQueuePage() {
   }
 
   const handleCallNext = () => {
-    if (sortedPannes.length > 0) {
-      navigate(`/failures/${sortedPannes[0].id}`)
+    if (filteredPannes.length > 0) {
+      navigate(`/failures/${filteredPannes[0].id}`)
+    }
+  }
+
+  // Prise en charge (RB-PR-004) : POST vide = affectation à l'utilisateur courant
+  const handleAssign = async (panne: WorkQueueItem) => {
+    try {
+      await panneApi.affecter(panne.id)
+      toast('success', 'Panne prise en charge')
+      await fetchData()
+    } catch (err) {
+      toast('error', getApiErrorMessage(err, "Impossible de prendre en charge cette panne."))
+    }
+  }
+
+  const handleScan = async (data: QrEquipmentData) => {
+    setShowScanner(false)
+    try {
+      const found = await equipmentApi.list({ search: data.num_inventaire })
+      if (found.length > 0) {
+        navigate(`/equipment/${found[0].id}`)
+      } else {
+        toast('error', `Aucun équipement trouvé pour le n° ${data.num_inventaire}`)
+      }
+    } catch (err) {
+      toast('error', getApiErrorMessage(err, 'Recherche impossible.'))
     }
   }
 
@@ -160,6 +205,33 @@ export default function WorkQueuePage() {
     return (order[a.niveau_criticite] ?? 4) - (order[b.niveau_criticite] ?? 4)
   })
 
+  // Filtres côté client (données MVP déjà chargées)
+  const filteredPannes = sortedPannes.filter((p) => {
+    if (criticiteFilter !== 'ALL' && p.niveau_criticite !== criticiteFilter) return false
+    if (affectationFilter === 'MINE') return p.affecte_a === user?.id
+    if (affectationFilter === 'NONE') return !p.affecte_a
+    if (affectationFilter.startsWith('tech:')) return p.affecte_a === Number(affectationFilter.slice(5))
+    return true
+  })
+
+  const totalPages = Math.max(1, Math.ceil(filteredPannes.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const pagePannes = filteredPannes.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const rangeStart = filteredPannes.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredPannes.length)
+
+  const critiquesCount = stats.par_criticite.CRITIQUE ?? 0
+  const techniciens = stats.techniciens ?? []
+  const ageMoyen = stats.age_moyen_minutes
+
+  const criticiteTabs: { key: CriticiteFilter; label: string; count: number }[] = [
+    { key: 'ALL', label: 'Toutes', count: stats.total_ouvertes },
+    { key: 'CRITIQUE', label: 'Critiques', count: stats.par_criticite.CRITIQUE ?? 0 },
+    { key: 'ELEVE', label: 'Élevées', count: stats.par_criticite.ELEVE ?? 0 },
+    { key: 'MOYEN', label: 'Moyennes', count: stats.par_criticite.MOYEN ?? 0 },
+    { key: 'FAIBLE', label: 'Faibles', count: stats.par_criticite.FAIBLE ?? 0 },
+  ]
+
   return (
     <div className="space-y-6">
       <PageHeader title="File de travail" description="Régulation technique — interventions prioritaires" />
@@ -177,28 +249,74 @@ export default function WorkQueuePage() {
               </p>
               <div className="flex items-center gap-4 mt-1">
                 <span className="flex items-center gap-1 text-xs text-red-600">
-                  <ShieldAlert className="w-3 h-3" /> 2 DM vitaux bloqués
+                  <ShieldAlert className="w-3 h-3" /> {critiquesCount} panne{critiquesCount > 1 ? 's' : ''} critique{critiquesCount > 1 ? 's' : ''}
                 </span>
                 <span className="flex items-center gap-1 text-xs text-slate-500">
-                  <Clock className="w-3 h-3" /> SLA moyen: 18 min (cible &lt; 30 min)
+                  <Clock className="w-3 h-3" /> Ouverture moyenne: {ageMoyen != null ? `${ageMoyen} min` : '—'}
                 </span>
               </div>
             </div>
           </div>
-          <button onClick={handleCallNext} className="btn-danger shrink-0" disabled={sortedPannes.length === 0}>
+          <button onClick={handleCallNext} className="btn-danger shrink-0" disabled={filteredPannes.length === 0}>
             <PhoneCall className="w-4 h-4" /> Prendre la prochaine urgence
           </button>
         </div>
       </div>
 
+      {/* Onglets criticité + filtre d'affectation */}
+      <div className="flex flex-wrap items-center gap-2">
+        {criticiteTabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setCriticiteFilter(tab.key)}
+            className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+              criticiteFilter === tab.key
+                ? 'bg-sky-600 text-white'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            {tab.label}
+            <span
+              className={`ml-1.5 font-mono ${
+                criticiteFilter === tab.key ? 'text-sky-100' : 'text-slate-400'
+              }`}
+            >
+              {tab.count}
+            </span>
+          </button>
+        ))}
+        <select
+          value={affectationFilter}
+          onChange={(e) => setAffectationFilter(e.target.value)}
+          aria-label="Filtrer par affectation"
+          className="ml-auto text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500"
+        >
+          <option value="ALL">Toutes les affectations</option>
+          <option value="MINE">Mes pannes</option>
+          <option value="NONE">Non affectées</option>
+          {techniciens.map((t) => (
+            <option key={t.id} value={`tech:${t.id}`}>
+              {t.nom}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Main queue - 3 cols */}
         <div className="lg:col-span-3 space-y-3">
-          {sortedPannes.length === 0 ? (
-            <EmptyState title="Aucune intervention en attente" description="Toutes les pannes sont clôturées." />
+          {filteredPannes.length === 0 ? (
+            <EmptyState
+              title="Aucune intervention en attente"
+              description={
+                criticiteFilter === 'ALL' && affectationFilter === 'ALL'
+                  ? 'Toutes les pannes sont clôturées.'
+                  : 'Aucune panne ne correspond à ces filtres.'
+              }
+            />
           ) : (
-            sortedPannes.map((panne) => {
-              const transitions = getTransitions(panne.statut)
+            pagePannes.map((panne) => {
+              const transitions = getTransitions(panne)
               return (
                 <div
                   key={panne.id}
@@ -216,15 +334,42 @@ export default function WorkQueuePage() {
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUT_COLORS[panne.statut] || ''}`}>
                             {STATUT_LABELS[panne.statut] || panne.statut}
                           </span>
+                          {panne.service_nom && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                              {panne.service_nom}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-slate-500 mt-1 line-clamp-2">{panne.description_signalement}</p>
-                        <div className="flex items-center gap-3 mt-2">
+                        {panne.cause_identifiee && (
+                          <p className="text-xs text-sky-700 mt-1 line-clamp-1">Cause : {panne.cause_identifiee}</p>
+                        )}
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
                           <span className="text-xs text-slate-400">
                             Signalé par: {panne.signale_par_nom}
                           </span>
                           <span className="text-xs text-slate-400">
                             {new Date(panne.date_signalement).toLocaleDateString('fr-FR')}
                           </span>
+                          {panne.affecte_a ? (
+                            <span
+                              className={`inline-flex items-center gap-1 text-xs font-semibold ${
+                                panne.affecte_a === user?.id ? 'text-sky-700' : 'text-slate-500'
+                              }`}
+                            >
+                              <span className="w-5 h-5 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center text-[9px] font-bold text-sky-700">
+                                {initiales(panne.affecte_a_nom)}
+                              </span>
+                              {panne.affecte_a === user?.id ? 'Affecté à vous' : panne.affecte_a_nom}
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleAssign(panne)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-800 hover:underline"
+                            >
+                              <UserCheck className="w-3 h-3" /> Prendre en charge
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -280,6 +425,34 @@ export default function WorkQueuePage() {
               )
             })
           )}
+
+          {/* Pagination */}
+          {filteredPannes.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between pt-2 text-xs text-slate-500">
+              <span>
+                Affichage de {rangeStart}–{rangeEnd} sur {filteredPannes.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                  className="btn-ghost text-xs px-2 py-1 disabled:opacity-40"
+                >
+                  Précédent
+                </button>
+                <span className="font-semibold text-slate-800 px-1">
+                  {currentPage}/{totalPages}
+                </span>
+                <button
+                  onClick={() => setPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                  className="btn-ghost text-xs px-2 py-1 disabled:opacity-40"
+                >
+                  Suivant
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* On-call roster - right sidebar */}
@@ -290,10 +463,13 @@ export default function WorkQueuePage() {
               <h2 className="text-sm font-semibold text-slate-900">Garde biomédicale</h2>
             </div>
             <div className="space-y-3">
-              {TECHNICIENS.map((tech) => (
-                <div key={tech.nom} className="flex items-center gap-3">
+              {techniciens.length === 0 && (
+                <p className="text-xs text-slate-500">Aucun technicien actif.</p>
+              )}
+              {techniciens.map((tech) => (
+                <div key={tech.id} className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center text-xs font-bold text-sky-700 shrink-0">
-                    {tech.avatar}
+                    {tech.initiales}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-slate-900 truncate">{tech.nom}</p>
@@ -308,6 +484,9 @@ export default function WorkQueuePage() {
                       </div>
                       <span className="text-[10px] text-slate-500 font-mono">{tech.charge}%</span>
                     </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {tech.interventions_en_cours} intervention{tech.interventions_en_cours > 1 ? 's' : ''} en cours
+                    </p>
                   </div>
                 </div>
               ))}
@@ -322,9 +501,14 @@ export default function WorkQueuePage() {
             <p className="text-xs text-slate-500">
               Scan DataMatrix / RFID au chevet pour prise en charge directe par terminal mobile.
             </p>
-            <button className="btn-secondary text-xs w-full mt-3">
+            <button onClick={() => setShowScanner(true)} className="btn-secondary text-xs w-full mt-3">
               <Smartphone className="w-4 h-4" /> Activer le scan
             </button>
+            {showScanner && (
+              <div className="mt-3">
+                <QrScanner onScan={handleScan} onClose={() => setShowScanner(false)} />
+              </div>
+            )}
           </div>
 
           <div className="card p-5">

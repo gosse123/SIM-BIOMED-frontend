@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import SyncStatus from '@/components/SyncStatus'
 import NotificationsBell from '@/components/NotificationsBell'
+import { workqueueApi } from '@/services/workqueue'
 
 interface NavItem {
   to: string
@@ -48,6 +49,20 @@ export default function SidebarLayout() {
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const [queueCount, setQueueCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    workqueueApi
+      .get()
+      .then((d) => {
+        if (!cancelled) setQueueCount(d.total_ouvertes)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     setMobileOpen(false)
@@ -93,8 +108,11 @@ export default function SidebarLayout() {
             >
               <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-medical-primary' : 'text-slate-500 group-hover:text-slate-300'}`} />
               {(!collapsed || isMobile) && <span className="truncate">{item.label}</span>}
-              {(!collapsed || isMobile) && item.badge && (
-                <span className="ml-auto w-2 h-2 rounded-full bg-red-500 animate-critical-pulse" aria-label="Alerte" />
+              {(!collapsed || isMobile) && item.badge && queueCount > 0 && (
+                <span
+                  className="ml-auto w-2 h-2 rounded-full bg-red-500 animate-critical-pulse"
+                  aria-label={`${queueCount} panne${queueCount > 1 ? 's' : ''} ouverte${queueCount > 1 ? 's' : ''} dans la file de travail`}
+                />
               )}
             </NavLink>
           )

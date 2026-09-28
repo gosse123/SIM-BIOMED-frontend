@@ -87,4 +87,12 @@ export const panneApi = {
     const { data } = await offlineAwareRequest('post', `/pannes/${id}/close/`, payload)
     return data
   },
+
+  // Prise en charge : sans argument → affectation à l'utilisateur courant ;
+  // { utilisateur: null } → désaffectation (RB-PR-004).
+  affecter: async (id: number, utilisateur?: number | null) => {
+    const payload = utilisateur === undefined ? {} : { utilisateur }
+    const { data } = await offlineAwareRequest('post', `/pannes/${id}/affecter/`, payload)
+    return data
+  },
 }
