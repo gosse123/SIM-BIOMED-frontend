@@ -1,12 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { CheckCircle, AlertCircle, X, type LucideIcon } from 'lucide-react'
-
-export interface Toast {
-  id: string
-  type: 'success' | 'error' | 'info'
-  message: string
-  duration?: number
-}
+import { registerToastListener, type Toast } from './toast'
 
 interface ToastItemProps {
   toast: Toast
@@ -63,23 +57,16 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
   )
 }
 
-let toastCounter = 0
-let addToastFn: ((toast: Omit<Toast, 'id'>) => void) | null = null
-
-export function toast(type: Toast['type'], message: string, duration?: number) {
-  addToastFn?.({ type, message, duration })
-}
-
 export function ToastContainer() {
   const [toasts, setToasts] = useState<Toast[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
+  const counterRef = useRef(0)
 
   useEffect(() => {
-    addToastFn = (t) => {
-      const id = String(++toastCounter)
+    return registerToastListener((t) => {
+      const id = String(++counterRef.current)
       setToasts((prev) => [...prev, { ...t, id }])
-    }
-    return () => { addToastFn = null }
+    })
   }, [])
 
   const removeToast = (id: string) => {

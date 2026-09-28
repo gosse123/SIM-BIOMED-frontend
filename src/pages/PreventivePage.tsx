@@ -4,7 +4,8 @@ import type { MaintenancePreventive } from '@/types/preventive'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
-import { toast } from '@/components/ui/Toast'
+import { toast } from '@/components/ui/toast'
+import { getApiErrorMessage } from '@/utils/errors'
 import { Play, CheckCircle2 } from 'lucide-react'
 
 export default function PreventivePage() {
@@ -32,8 +33,8 @@ export default function PreventivePage() {
       await preventiveApi.start(id)
       toast('success', 'Maintenance démarrée')
       fetchData()
-    } catch (err: any) {
-      toast('error', err?.response?.data?.detail || 'Erreur lors du démarrage.')
+    } catch (err) {
+      toast('error', getApiErrorMessage(err, 'Erreur lors du démarrage.'))
     }
   }
 
@@ -42,8 +43,8 @@ export default function PreventivePage() {
       await preventiveApi.finish(id, { commentaire: '' })
       toast('success', 'Maintenance terminée')
       fetchData()
-    } catch (err: any) {
-      toast('error', err?.response?.data?.detail || 'Erreur lors de la finalisation.')
+    } catch (err) {
+      toast('error', getApiErrorMessage(err, 'Erreur lors de la finalisation.'))
     }
   }
 

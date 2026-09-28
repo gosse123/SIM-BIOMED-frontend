@@ -7,6 +7,7 @@ import { StatusBadge, CriticalityBadge } from '@/components/ui/StatusBadge'
 import SearchInput from '@/components/ui/SearchInput'
 import PageHeader from '@/components/ui/PageHeader'
 import { ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
+import { getApiErrorMessage } from '@/utils/errors'
 
 function SkeletonRow() {
   return (
@@ -53,8 +54,8 @@ export default function EquipmentListPage() {
       setItems(eqData)
       setServices(svcData)
       setError('')
-    } catch (err: any) {
-      setError(err.message || 'Erreur de chargement')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Erreur de chargement'))
     } finally {
       setLoading(false)
     }

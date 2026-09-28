@@ -6,7 +6,8 @@ import QrScanner, { type QrEquipmentData } from '@/components/QrScanner'
 import PageHeader from '@/components/ui/PageHeader'
 import { StatusBadge, CriticalityBadge } from '@/components/ui/StatusBadge'
 import { LoadingState, ErrorState } from '@/components/ui/FeedbackStates'
-import { toast } from '@/components/ui/Toast'
+import { toast } from '@/components/ui/toast'
+import { getApiErrorMessage } from '@/utils/errors'
 import { QrCode, Save } from 'lucide-react'
 
 export default function EquipmentFormPage() {
@@ -124,9 +125,8 @@ export default function EquipmentFormPage() {
         toast('success', 'Modifications enregistrées')
         navigate(`/equipment/${id}`)
       }
-    } catch (err: any) {
-      const msg = err?.response?.data
-      setError(typeof msg === 'string' ? msg : JSON.stringify(msg) || 'Erreur lors de la sauvegarde.')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Erreur lors de la sauvegarde.'))
     } finally {
       setIsSubmitting(false)
     }

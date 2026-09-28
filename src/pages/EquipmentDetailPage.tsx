@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { equipmentApi } from '@/services/equipment'
 import type { Equipment } from '@/types/equipment'
+import type { Panne } from '@/types/panne'
+import type { Intervention } from '@/types/intervention'
 import PageHeader from '@/components/ui/PageHeader'
 import { LoadingState, ErrorState } from '@/components/ui/FeedbackStates'
 import DeviceDetailHeader from '@/components/equipment/DeviceDetailHeader'
@@ -33,35 +35,36 @@ export default function EquipmentDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('infos')
-  const [pannes, setPannes] = useState<any[]>([])
-  const [interventions, setInterventions] = useState<any[]>([])
+  const [pannes, setPannes] = useState<Panne[]>([])
+  const [interventions, setInterventions] = useState<Intervention[]>([])
 
-  const fetchData = async () => {
+  useEffect(() => {
     if (!id) return
     setLoading(true)
-    try {
-      const eq = await equipmentApi.get(Number(id))
-      setDevice(eq)
-      setError('')
-    } catch {
-      setError('Équipement introuvable.')
-    } finally {
-      setLoading(false)
+    const load = async () => {
+      try {
+        const eq = await equipmentApi.get(Number(id))
+        setDevice(eq)
+        setError('')
+      } catch {
+        setError('Équipement introuvable.')
+      } finally {
+        setLoading(false)
+      }
     }
-  }
-
-  useEffect(() => { fetchData() }, [id])
+    load()
+  }, [id])
 
   useEffect(() => {
     if (!device) return
     if (activeTab === 'pannes') {
       panneApi.list().then((data) => {
-        setPannes(data.filter((p: any) => p.equipement === device.id))
+        setPannes(data.filter((p) => p.equipement === device.id))
       }).catch(() => {})
     }
     if (activeTab === 'interventions') {
       interventionApi.list().then((data) => {
-        setInterventions(data.filter((i: any) => i.equipement === device.id))
+        setInterventions(data.filter((i) => i.equipement === device.id))
       }).catch(() => {})
     }
   }, [activeTab, device])
@@ -136,7 +139,7 @@ export default function EquipmentDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {pannes.map((p: any) => (
+                  {pannes.map((p) => (
                     <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-3"><StatusBadge status={p.statut} /></td>
                       <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate">{p.description_signalement}</td>
@@ -170,7 +173,7 @@ export default function EquipmentDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {interventions.map((i: any) => (
+                  {interventions.map((i) => (
                     <tr key={i.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-3 text-sm text-slate-700">{i.type_intervention}</td>
                       <td className="px-4 py-3"><StatusBadge status={i.statut} /></td>

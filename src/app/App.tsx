@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './AuthContext'
+import { AuthProvider } from './AuthProvider'
+import { useAuth } from './AuthContext'
+import { ToastContainer } from '@/components/ui/Toast'
 import SidebarLayout from '@/layouts/SidebarLayout'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
@@ -78,6 +80,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
+        <ToastContainer />
       </AuthProvider>
     </BrowserRouter>
   )

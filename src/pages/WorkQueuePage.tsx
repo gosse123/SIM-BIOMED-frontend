@@ -4,7 +4,8 @@ import { workqueueApi, type WorkQueueStats, type WorkQueueItem } from '@/service
 import { panneApi } from '@/services/panne'
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
-import { toast } from '@/components/ui/Toast'
+import { toast } from '@/components/ui/toast'
+import { getApiErrorMessage } from '@/utils/errors'
 import QualifyModal from '@/components/panne/QualifyModal'
 import CriticiteModal from '@/components/panne/CriticiteModal'
 import DiagnosticModal from '@/components/panne/DiagnosticModal'
@@ -106,8 +107,8 @@ export default function WorkQueuePage() {
       await fn()
       toast('success', 'Transition effectuée avec succès')
       await fetchData()
-    } catch (err: any) {
-      toast('error', err?.response?.data?.detail || "Erreur lors de l'action.")
+    } catch (err) {
+      toast('error', getApiErrorMessage(err, "Erreur lors de l'action."))
     } finally {
       setActiveModal(null)
       setSelectedPanne(null)

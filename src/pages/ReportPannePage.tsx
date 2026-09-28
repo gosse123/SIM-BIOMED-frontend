@@ -5,7 +5,7 @@ import { equipmentApi } from '@/services/equipment'
 import type { Equipment } from '@/types/equipment'
 import { LoadingState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
-import { toast } from '@/components/ui/Toast'
+import { toast } from '@/components/ui/toast'
 import { AlertTriangle, Save } from 'lucide-react'
 
 export default function ReportPannePage() {

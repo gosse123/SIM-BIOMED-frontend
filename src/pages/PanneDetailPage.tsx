@@ -5,7 +5,8 @@ import type { Panne } from '@/types/panne'
 import { StatusBadge, CriticalityBadge } from '@/components/ui/StatusBadge'
 import { LoadingState, ErrorState } from '@/components/ui/FeedbackStates'
 import { ConfirmDialog } from '@/components/ui/Modal'
-import { toast } from '@/components/ui/Toast'
+import { toast } from '@/components/ui/toast'
+import { getApiErrorMessage } from '@/utils/errors'
 import PageHeader from '@/components/ui/PageHeader'
 import QualifyModal from '@/components/panne/QualifyModal'
 import CriticiteModal from '@/components/panne/CriticiteModal'
@@ -43,8 +44,8 @@ export default function PanneDetailPage() {
       await fn()
       if (id) await loadPanne(Number(id))
       toast('success', 'Action effectuée avec succès')
-    } catch (err: any) {
-      toast('error', err?.response?.data?.detail || "Erreur lors de l'action.")
+    } catch (err) {
+      toast('error', getApiErrorMessage(err, "Erreur lors de l'action."))
     } finally {
       setActionLoading(false)
     }

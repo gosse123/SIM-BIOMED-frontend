@@ -5,8 +5,9 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import KpiCard from '@/components/ui/KpiCard'
 import { StatusBadge, CriticalityBadge } from '@/components/ui/StatusBadge'
 import { LoadingState, ErrorState } from '@/components/ui/FeedbackStates'
-import { dashboardApi } from '@/services/dashboard'
+import { dashboardApi, type DashboardData } from '@/services/dashboard'
 import { workqueueApi, type WorkQueueItem } from '@/services/workqueue'
+import { getApiErrorMessage } from '@/utils/errors'
 
 const STATUS_COLORS: Record<string, string> = {
   FONCTIONNEL: '#16a34a',
@@ -32,7 +33,7 @@ const CRITICITE_ROW_COLORS: Record<string, string> = {
 }
 
 export default function DashboardPage() {
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<DashboardData | null>(null)
   const [urgentPannes, setUrgentPannes] = useState<WorkQueueItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -48,8 +49,8 @@ export default function DashboardPage() {
       })
       setUrgentPannes(sorted)
       setError('')
-    } catch (err: any) {
-      setError(err.message || 'Erreur de chargement')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Erreur de chargement'))
     } finally {
       setLoading(false)
     }
@@ -61,9 +62,9 @@ export default function DashboardPage() {
   if (error) return <ErrorState message={error} onRetry={fetchData} />
   if (!data) return null
 
-  const equipements = data.equipements || {}
-  const pannes = data.pannes || {}
-  const maintenances = data.maintenances || {}
+  const equipements: Partial<DashboardData['equipements']> = data.equipements || {}
+  const pannes: Partial<DashboardData['pannes']> = data.pannes || {}
+  const maintenances: Partial<DashboardData['maintenances']> = data.maintenances || {}
 
   const total = equipements.total || 0
   const fonctionnels = equipements.fonctionnels || 0
