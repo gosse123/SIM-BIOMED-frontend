@@ -4,12 +4,13 @@
 services:
   - type: web
     name: simbiomed-frontend
+    region: frankfurt
     runtime: docker
-    plan: starter
+    plan: 0.5c-512mb
     dockerfilePath: ./Dockerfile.prod
     dockerContext: .
     healthCheckPath: /healthz
-    autoDeploy: true
+    autoDeployTrigger: 'commit'
     envVars:
       - key: API_UPSTREAM
         value: https://simbiomed-api.onrender.com
