@@ -1,0 +1,15 @@
+# Blueprint Render — interface SIM-BIOMED (React/nginx)
+# Le service proxy /api (et /admin) vers l'API. Renseigner API_UPSTREAM si
+# l'API porte un autre nom (réseau privé : http://simbiomed-api).
+services:
+  - type: web
+    name: simbiomed-frontend
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile.prod
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: API_UPSTREAM
+        value: https://simbiomed-api.onrender.com
