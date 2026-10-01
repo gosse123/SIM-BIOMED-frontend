@@ -1,0 +1,28 @@
+name: Keep-alive
+
+on:
+  schedule:
+    # Plan gratuit Render : mise en veille après ~15 min sans requête.
+    # On ping toutes les 10 min pour éviter les cold starts (~45 s).
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Réveiller l'API et le frontend
+        run: |
+          set -u
+          fail=0
+          for url in \
+            "https://simbiomed-api-k3ca.onrender.com/api/healthz/" \
+            "https://simbiomed-frontend.onrender.com/healthz"
+          do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -m 90 "$url" || true)
+            echo "$url -> $code"
+            if [ "$code" != "200" ]; then
+              fail=1
+            fi
+          done
+          exit $fail
