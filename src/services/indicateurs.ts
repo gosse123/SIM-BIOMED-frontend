@@ -1,6 +1,7 @@
 import api from './api'
 import { put, getAll } from './db'
 import { network } from './network'
+import { isServerUnavailable } from '@/utils/errors'
 
 const CACHE_TTL = 30 * 60 * 1000
 
@@ -20,7 +21,8 @@ export const indicateursApi = {
         const { data } = await api.get('/indicateurs/')
         await put('indicateurs', 'indicateurs-data', data, CACHE_TTL)
         return data
-      } catch {
+      } catch (err) {
+        if (!isServerUnavailable(err)) throw err
         const cached = await getAll<Indicateur[]>('indicateurs')
         return cached.length > 0 ? cached[0] : []
       }

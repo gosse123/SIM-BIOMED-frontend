@@ -1,6 +1,7 @@
 import api from './api'
 import { put, getAll } from './db'
 import { network } from './network'
+import { isServerUnavailable } from '@/utils/errors'
 
 const CACHE_TTL = 10 * 60 * 1000
 
@@ -44,7 +45,8 @@ export const workqueueApi = {
         const { data } = await api.get('/workqueue/')
         await put('workqueue', 'workqueue-stats', data, CACHE_TTL)
         return data
-      } catch {
+      } catch (err) {
+        if (!isServerUnavailable(err)) throw err
         const cached = await getAll<WorkQueueStats>('workqueue')
         return cached.length > 0 ? cached[0] : { total_ouvertes: 0, par_statut: {}, par_criticite: {}, pannes: [] }
       }

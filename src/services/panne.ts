@@ -3,6 +3,7 @@ import { put, get } from './db'
 import type { Panne } from '@/types/panne'
 import { normalizeList } from '@/types/api'
 import { network } from './network'
+import { isServerUnavailable } from '@/utils/errors'
 
 const CACHE_TTL = 10 * 60 * 1000 // 10 min (shorter for mutable data)
 
@@ -15,7 +16,8 @@ export const panneApi = {
         const { data } = await api.get('/pannes/', { params })
         await put('pannes', cacheKey, data, CACHE_TTL)
         return normalizeList<Panne>(data)
-      } catch {
+      } catch (err) {
+        if (!isServerUnavailable(err)) throw err
         const cached = await get<Panne[] | { results?: Panne[] }>('pannes', cacheKey)
         return cached ? normalizeList<Panne>(cached) : []
       }
@@ -33,7 +35,8 @@ export const panneApi = {
         const { data } = await api.get(`/pannes/${id}/`)
         await put('pannes', cacheKey, data, CACHE_TTL)
         return data
-      } catch {
+      } catch (err) {
+        if (!isServerUnavailable(err)) throw err
         const cached = await get<Panne>('pannes', cacheKey)
         return cached || {} as Panne
       }

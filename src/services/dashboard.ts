@@ -1,6 +1,7 @@
 import api from './api'
 import { put, getAll } from './db'
 import { network } from './network'
+import { isServerUnavailable } from '@/utils/errors'
 
 const CACHE_TTL = 10 * 60 * 1000
 
@@ -28,7 +29,8 @@ export const dashboardApi = {
         const { data } = await api.get('/dashboard/')
         await put('dashboard', 'dashboard-data', data, CACHE_TTL)
         return data
-      } catch {
+      } catch (err) {
+        if (!isServerUnavailable(err)) throw err
         const cached = await getAll<DashboardData>('dashboard')
         return cached.length > 0 ? cached[0] : {
           equipements: { total: 0, fonctionnels: 0, en_panne: 0 },

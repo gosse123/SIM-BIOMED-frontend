@@ -178,6 +178,8 @@ export interface SyncQueueEntry {
   syncedAt?: number
   syncStatus: 'pending' | 'syncing' | 'synced' | 'error'
   retryCount: number
+  /** Horodatage de la dernière tentative (backoff entre les retries). */
+  lastAttemptAt?: number
   error?: string
 }
 

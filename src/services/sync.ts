@@ -18,10 +18,11 @@ class SyncEngine {
   private _syncInterval: ReturnType<typeof setInterval> | null = null
 
   constructor() {
-    // Synchronisation automatique au retour réseau
+    // Synchronisation automatique au retour réseau : nouvelle tentative
+    // immédiate (force), sans attendre le backoff.
     network.onChange((isOnline) => {
       if (isOnline) {
-        this.sync()
+        void this.sync({ force: true })
       } else {
         this.setStatus('offline')
       }
@@ -78,10 +79,12 @@ class SyncEngine {
   }
 
   /**
-   * Synchronisation forcée (admin uniquement).
-   * Appelée aussi automatiquement au retour réseau.
+   * Synchronisation : traite la file hors ligne.
+   * `force` ignore le backoff et la limite d'essais automatiques
+   * (bouton « Forcer la synchronisation », retour en ligne).
+   * Appelée aussi automatiquement toutes les 30 s (sans force).
    */
-  async sync(): Promise<{ synced: number; errors: number }> {
+  async sync(options?: { force?: boolean }): Promise<{ synced: number; errors: number }> {
     if (this._isProcessing) return { synced: 0, errors: 0 }
     if (!network.isOnline()) {
       this.setStatus('offline')
@@ -92,11 +95,14 @@ class SyncEngine {
     this.setStatus('syncing')
 
     try {
-      const results = await processSyncQueue()
+      const results = await processSyncQueue({ force: options?.force })
       const synced = results.filter((r: { status: string }) => r.status === 'synced').length
       const errors = results.filter((r: { status: string }) => r.status === 'error').length
 
-      if (errors > 0) {
+      await this.updatePendingCount()
+
+      if (errors > 0 || this._pendingCount > 0) {
+        // reste des opérations non synchronisées (erreur ou en backoff)
         this.setStatus('error')
       } else {
         this.setStatus('synced')
@@ -108,7 +114,6 @@ class SyncEngine {
         }, 3000)
       }
 
-      await this.updatePendingCount()
       return { synced, errors }
     } catch {
       this.setStatus('error')

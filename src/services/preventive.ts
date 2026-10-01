@@ -3,6 +3,7 @@ import { put, get } from './db'
 import type { MaintenancePlan, MaintenancePreventive } from '@/types/preventive'
 import { normalizeList } from '@/types/api'
 import { network } from './network'
+import { isServerUnavailable } from '@/utils/errors'
 
 const CACHE_TTL = 30 * 60 * 1000 // 30 min for preventive (less mutable)
 
@@ -14,7 +15,8 @@ export const preventiveApi = {
         const { data } = await api.get('/maintenance-plans/')
         await put('maintenance-plans', cacheKey, data, CACHE_TTL)
         return normalizeList<MaintenancePlan>(data)
-      } catch {
+      } catch (err) {
+        if (!isServerUnavailable(err)) throw err
         const cached = await get<MaintenancePlan[] | { results?: MaintenancePlan[] }>('maintenance-plans', cacheKey)
         return cached ? normalizeList<MaintenancePlan>(cached) : []
       }
@@ -35,7 +37,8 @@ export const preventiveApi = {
         const { data } = await api.get('/maintenance-preventive/', { params })
         await put('maintenance-preventive', cacheKey, data, CACHE_TTL)
         return normalizeList<MaintenancePreventive>(data)
-      } catch {
+      } catch (err) {
+        if (!isServerUnavailable(err)) throw err
         const cached = await get<MaintenancePreventive[] | { results?: MaintenancePreventive[] }>('maintenance-preventive', cacheKey)
         return cached ? normalizeList<MaintenancePreventive>(cached) : []
       }

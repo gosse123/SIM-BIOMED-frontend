@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/app/AuthContext'
 import { network } from '@/services/network'
 import { syncEngine, type SyncStatus as SyncStatusType } from '@/services/sync'
 import { RefreshCw, Check, X, WifiOff, ChevronDown } from 'lucide-react'
@@ -13,13 +12,10 @@ const STATUS_CONFIG: Record<SyncStatusType, { label: string; color: string; bg: 
 }
 
 export default function SyncStatus() {
-  const { user } = useAuth()
   const [isOnline, setIsOnline] = useState(network.isOnline())
   const [syncStatus, setSyncStatus] = useState<SyncStatusType>('idle')
   const [pendingCount, setPendingCount] = useState(0)
   const [showDetail, setShowDetail] = useState(false)
-
-  const isAdmin = user?.role === 'ADMINISTRATEUR'
 
   useEffect(() => {
     const unsubNet = network.onChange(setIsOnline)
@@ -32,7 +28,7 @@ export default function SyncStatus() {
 
   const handleForceSync = async () => {
     setShowDetail(false)
-    const result = await syncEngine.sync()
+    const result = await syncEngine.sync({ force: true })
     if (result.errors > 0) {
       alert(`Sync terminée : ${result.synced} ok, ${result.errors} erreurs`)
     }
@@ -95,7 +91,7 @@ export default function SyncStatus() {
             </div>
           )}
 
-          {isOnline && isAdmin && pendingCount > 0 && (
+          {isOnline && pendingCount > 0 && (
             <button
               onClick={handleForceSync}
               className="w-full py-2 rounded-lg bg-sky-600 text-white text-xs font-semibold hover:bg-sky-700 transition-colors"

@@ -243,13 +243,42 @@ export async function rewriteDependentEntry(
 }
 
 /**
+ * Backoff de la file de synchronisation : 30 s, 1 min, 2 min… plafonné à
+ * 15 min, puis plus d'essai automatique (un « Forcer la synchronisation »
+ * reste possible à tout moment).
+ */
+export const MAX_AUTO_SYNC_RETRIES = 8
+export const SYNC_BACKOFF_BASE_MS = 30_000
+export const SYNC_BACKOFF_MAX_MS = 15 * 60 * 1000
+
+export function syncBackoffMs(retryCount: number): number {
+  const exponent = Math.max(retryCount - 1, 0)
+  return Math.min(SYNC_BACKOFF_BASE_MS * 2 ** exponent, SYNC_BACKOFF_MAX_MS)
+}
+
+/** Une entrée déjà en erreur est-elle réessayable maintenant (sans force) ? */
+export function shouldAttemptSyncEntry(
+  entry: { syncStatus: string; retryCount: number; createdAt: number; lastAttemptAt?: number },
+  force: boolean,
+  now: number = Date.now(),
+): boolean {
+  if (entry.syncStatus === 'synced') return false
+  if (force || entry.retryCount === 0) return true
+  if (entry.retryCount >= MAX_AUTO_SYNC_RETRIES) return false
+  const lastAttempt = entry.lastAttemptAt ?? entry.createdAt
+  return now - lastAttempt >= syncBackoffMs(entry.retryCount)
+}
+
+/**
  * Process the sync queue when back online.
+ * `force` ignore le backoff et la limite d'essais (bouton « Forcer »).
  * Returns results of each synced operation.
  */
-export async function processSyncQueue(): Promise<
-  Array<{ id: string; status: 'synced' | 'error'; error?: string }>
-> {
+export async function processSyncQueue(
+  options?: { force?: boolean },
+): Promise<Array<{ id: string; status: 'synced' | 'error'; error?: string }>> {
   if (!network.isOnline()) return []
+  const force = options?.force ?? false
 
   const queue = await getSyncQueue()
   const results: Array<{ id: string; status: 'synced' | 'error'; error?: string }> = []
@@ -259,9 +288,14 @@ export async function processSyncQueue(): Promise<
       await removeSyncEntry(entry.id)
       continue
     }
+    if (!shouldAttemptSyncEntry(entry, force)) continue
 
     try {
-      await updateSyncEntry({ ...entry, syncStatus: 'syncing' })
+      await updateSyncEntry({
+        ...entry,
+        syncStatus: 'syncing',
+        lastAttemptAt: Date.now(),
+      })
 
       // Réécrire les références aux IDs temporaires avant envoi (opérations dépendantes)
       const rewritten = await rewriteDependentEntry(entry)
@@ -300,6 +334,7 @@ export async function processSyncQueue(): Promise<
         ...entry,
         syncStatus: 'error',
         retryCount: entry.retryCount + 1,
+        lastAttemptAt: Date.now(),
         error: errorMsg,
       })
       results.push({ id: entry.id, status: 'error', error: errorMsg })

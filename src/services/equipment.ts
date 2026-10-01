@@ -3,6 +3,7 @@ import { put, get } from './db'
 import type { Equipment, Service, Localisation } from '@/types/equipment'
 import { normalizeList } from '@/types/api'
 import { network } from './network'
+import { isServerUnavailable } from '@/utils/errors'
 
 const CACHE_TTL = 15 * 60 * 1000 // 15 min
 
@@ -15,7 +16,8 @@ export const equipmentApi = {
         const { data } = await api.get('/equipment/', { params })
         await put('equipment', cacheKey, data, CACHE_TTL)
         return normalizeList<Equipment>(data)
-      } catch {
+      } catch (err) {
+        if (!isServerUnavailable(err)) throw err
         const cached = await get<Equipment[] | { results?: Equipment[] }>('equipment', cacheKey)
         return cached ? normalizeList<Equipment>(cached) : []
       }
@@ -33,7 +35,8 @@ export const equipmentApi = {
         const { data } = await api.get(`/equipment/${id}/`)
         await put('equipment', cacheKey, data, CACHE_TTL)
         return data
-      } catch {
+      } catch (err) {
+        if (!isServerUnavailable(err)) throw err
         const cached = await get<Equipment>('equipment', cacheKey)
         return cached || {} as Equipment
       }
@@ -64,7 +67,8 @@ export const equipmentApi = {
         const { data } = await api.get('/services/')
         await put('services', cacheKey, data, CACHE_TTL)
         return normalizeList<Service>(data)
-      } catch {
+      } catch (err) {
+        if (!isServerUnavailable(err)) throw err
         const cached = await get<Service[] | { results?: Service[] }>('services', cacheKey)
         return cached ? normalizeList<Service>(cached) : []
       }
@@ -80,7 +84,8 @@ export const equipmentApi = {
         const { data } = await api.get('/locations/')
         await put('locations', cacheKey, data, CACHE_TTL)
         return normalizeList<Localisation>(data)
-      } catch {
+      } catch (err) {
+        if (!isServerUnavailable(err)) throw err
         const cached = await get<Localisation[] | { results?: Localisation[] }>('locations', cacheKey)
         return cached ? normalizeList<Localisation>(cached) : []
       }
