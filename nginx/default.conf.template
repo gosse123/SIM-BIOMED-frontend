@@ -29,6 +29,15 @@ server {
         return 200 "ok\n";
     }
 
+    # Origine réelle de l'API (injectée à l'exécution, pas à la construction
+    # Docker) : le front l'utilise pour réveiller directement l'API en veille.
+    location = /api/origin {
+        access_log off;
+        default_type text/plain;
+        add_header Cache-Control "no-store";
+        return 200 "${API_UPSTREAM}";
+    }
+
     location /api/ {
         proxy_pass ${API_UPSTREAM};
         proxy_http_version 1.1;

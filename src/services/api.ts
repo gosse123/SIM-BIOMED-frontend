@@ -24,17 +24,48 @@ const READ_RETRY_DELAYS = [3000, 8000, 15000, 30000]
 const WRITE_RETRY_DELAYS = [2000, 5000]
 const WAKE_EVENT = 'api:server-waking'
 let lastWakeAt = 0
+let apiOriginPromise: Promise<string | null> | null = null
+
+/**
+ * Origine réelle de l'API. Priorité à VITE_API_ORIGIN (build), sinon on la
+ * demande à nginx (`/api/origin`, injectée à l'exécution) : les variables
+ * d'environnement ne sont pas visibles lors des builds Docker.
+ */
+function getApiOrigin(): Promise<string | null> {
+  const fromBuild = import.meta.env.VITE_API_ORIGIN as string | undefined
+  if (fromBuild) return Promise.resolve(fromBuild)
+  if (!apiOriginPromise) {
+    apiOriginPromise = fetch('/api/origin', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.text() : ''))
+      .then((text) => {
+        const origin = text.trim().replace(/\/+$/, '')
+        return /^https?:\/\/.+/.test(origin) ? origin : null
+      })
+      .catch(() => null)
+      .then((origin) => {
+        // échec → on oublie pour retenter au prochain réveil
+        if (!origin) apiOriginPromise = null
+        return origin
+      })
+  }
+  return apiOriginPromise
+}
 
 function wakeServer() {
-  const origin = import.meta.env.VITE_API_ORIGIN as string | undefined
-  if (!origin) return
   const now = Date.now()
   if (now - lastWakeAt < 15000) return
   lastWakeAt = now
+  // événement synchrone : le bandeau « réveil » s'affiche tout de suite
   window.dispatchEvent(new Event(WAKE_EVENT))
-  void fetch(`${origin}/api/healthz/`, { headers: { Accept: 'application/json' } }).catch(() => {
-    /* le réveil est best-effort : les retries suivront */
-  })
+  void (async () => {
+    const origin = await getApiOrigin()
+    if (!origin) return
+    await fetch(`${origin}/api/healthz/`, { headers: { Accept: 'application/json' } }).catch(
+      () => {
+        /* le réveil est best-effort : les retries suivront */
+      },
+    )
+  })()
 }
 
 export { WAKE_EVENT }
