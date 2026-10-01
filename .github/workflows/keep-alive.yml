@@ -4,7 +4,8 @@ on:
   schedule:
     # Plan gratuit Render : mise en veille après ~15 min sans requête.
     # On ping toutes les 10 min pour éviter les cold starts (~45 s).
-    - cron: '*/10 * * * *'
+    # Créneaux décalés (:03, :13…) pour éviter la charge du début d'heure.
+    - cron: '3,13,23,33,43,53 * * * *'
   workflow_dispatch:
 
 jobs:
