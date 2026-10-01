@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/app/AuthContext'
 import { profileApi } from '@/services/api'
+import { getApiErrorMessage } from '@/utils/errors'
 import { Building2, CreditCard, Briefcase, CheckCircle2, Lock } from 'lucide-react'
 
 export default function CompleteProfilePage() {
@@ -52,8 +53,7 @@ export default function CompleteProfilePage() {
         window.location.href = '/'
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erreur lors de la complétion du profil.'
-      setError(msg)
+      setError(getApiErrorMessage(err, 'Erreur lors de la complétion du profil.'))
     } finally {
       setLoading(false)
     }

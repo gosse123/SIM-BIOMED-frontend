@@ -2,6 +2,7 @@ import axios, { type AxiosRequestConfig } from 'axios'
 import { v4 as uuidv4 } from 'uuid'
 import type { LoginResponse, User } from '@/types/auth'
 import type { DemandeAcces, Notification } from '@/types/demandes'
+import { isServerUnavailable } from '@/utils/errors'
 import { network } from './network'
 import { addToSyncQueue, getSyncQueue, updateSyncEntry, removeSyncEntry } from './db'
 import { addPendingEntity, setReconciledId, getPendingEntityByOfflineId, removePendingEntity, getAllReconciledIds } from './db'
@@ -10,7 +11,33 @@ import { put } from './db'
 const api = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
+  timeout: 60000,
 })
+
+/**
+ * Le plan gratuit d'hébergement met l'API en veille après ~15 min d'inactivité :
+ * le premier appel reçoit un 502 (proxy) pendant le réveil (~30-60 s).
+ * On réessaie avec backoff, et on réveille l'API en appelant son origine
+ * directement (CORS ouvert) — le proxy nginx ne déclenche pas toujours le réveil.
+ */
+const READ_RETRY_DELAYS = [3000, 8000, 15000, 30000]
+const WRITE_RETRY_DELAYS = [2000, 5000]
+const WAKE_EVENT = 'api:server-waking'
+let lastWakeAt = 0
+
+function wakeServer() {
+  const origin = import.meta.env.VITE_API_ORIGIN as string | undefined
+  if (!origin) return
+  const now = Date.now()
+  if (now - lastWakeAt < 15000) return
+  lastWakeAt = now
+  window.dispatchEvent(new Event(WAKE_EVENT))
+  void fetch(`${origin}/api/healthz/`, { headers: { Accept: 'application/json' } }).catch(() => {
+    /* le réveil est best-effort : les retries suivront */
+  })
+}
+
+export { WAKE_EVENT }
 
 // Request interceptor: attach token
 api.interceptors.request.use((config) => {
@@ -25,12 +52,29 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Response interceptor: handle 401 + refresh
+// Response interceptor: 401 + refresh, et réveil/retries si le serveur est indisponible
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      originalRequest &&
+      isServerUnavailable(error) &&
+      network.isOnline()
+    ) {
+      const isWrite = ['post', 'patch', 'put', 'delete'].includes(
+        (originalRequest.method ?? '').toLowerCase(),
+      )
+      const delays = isWrite ? WRITE_RETRY_DELAYS : READ_RETRY_DELAYS
+      const attempt = originalRequest._serverRetries ?? 0
+      if (attempt < delays.length) {
+        originalRequest._serverRetries = attempt + 1
+        if (attempt === 0) wakeServer()
+        await new Promise((resolve) => setTimeout(resolve, delays[attempt]))
+        return api(originalRequest)
+      }
+    }
+    if (originalRequest && error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
       const refreshToken = localStorage.getItem('refresh_token')
       if (refreshToken) {
@@ -40,7 +84,14 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${data.access}`
           // Preserve X-Offline-Id on retry
           return api(originalRequest)
-        } catch {
+        } catch (refreshErr: unknown) {
+          if (isServerUnavailable(refreshErr)) {
+            // Serveur injoignable : ce n'est pas un vrai refus d'authentification,
+            // on ne purge pas les jetons (sinon déconnexion à tort hors ligne).
+            return Promise.reject(
+              new Error('Serveur injoignable pendant le rafraîchissement de la session.'),
+            )
+          }
           localStorage.removeItem('access_token')
           localStorage.removeItem('refresh_token')
           window.location.href = '/login'
@@ -63,12 +114,23 @@ export async function offlineAwareRequest<T>(
 ): Promise<{ data: T; offline?: boolean; offlineId?: string }> {
   const isWrite = ['post', 'patch', 'put', 'delete'].includes(method)
 
-  // GET requests: always try network, fallback to caller
-  if (!isWrite || network.isOnline()) {
+  // GET : toujours réseau, l'appelant gère le fallback
+  if (!isWrite) {
     return api[method](url, data, config) as Promise<{ data: T }>
   }
 
-  // Offline mutation: queue it
+  // Écriture en ligne : on tente le serveur. Si le serveur est injoignable
+  // (API en veille, coupure, proxy 502) alors que la carte réseau est active,
+  // on met en file au lieu de perdre la saisie de l'utilisateur.
+  if (network.isOnline()) {
+    try {
+      return await (api[method](url, data, config) as Promise<{ data: T }>)
+    } catch (err) {
+      if (!isServerUnavailable(err)) throw err
+    }
+  }
+
+  // Hors ligne ou serveur injoignable : on met en file
   const offlineId = uuidv4()
   const tempId = Math.floor(Math.random() * -1000) - 1
   const entry = {

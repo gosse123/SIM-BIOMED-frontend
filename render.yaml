@@ -17,3 +17,7 @@ services:
     envVars:
       - key: API_UPSTREAM
         sync: false
+      # Origine de l'API pour le réveil direct (CORS ouvert côté Django) :
+      # le proxy /api ne déclenche pas toujours le cold start du plan gratuit.
+      - key: VITE_API_ORIGIN
+        value: https://simbiomed-api-k3ca.onrender.com

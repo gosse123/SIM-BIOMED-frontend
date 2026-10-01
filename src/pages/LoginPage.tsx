@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/app/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { demandesApi } from '@/services/api'
+import { demandesApi, WAKE_EVENT } from '@/services/api'
+import { getApiErrorMessage, isServerUnavailable } from '@/utils/errors'
 import { Activity, Wifi, Eye, EyeOff, KeyRound, UserPlus, CheckCircle2, ArrowLeft } from 'lucide-react'
 
 const ROLES = [
@@ -29,16 +30,31 @@ export default function LoginPage() {
   })
   const { login } = useAuth()
   const navigate = useNavigate()
+  const [waking, setWaking] = useState(false)
+
+  useEffect(() => {
+    const onWake = () => setWaking(true)
+    window.addEventListener(WAKE_EVENT, onWake)
+    return () => window.removeEventListener(WAKE_EVENT, onWake)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setWaking(false)
     setIsLoading(true)
     try {
       await login(username, password)
       navigate('/')
-    } catch {
-      setError('Identifiants incorrects. Vérifiez votre login et mot de passe.')
+    } catch (err: unknown) {
+      setWaking(false)
+      if (isServerUnavailable(err)) {
+        setError(
+          'Le serveur est en cours de démarrage (hébergement gratuit, ~1 min après inactivité). Vos identifiants sont conservés, réessayez dans un instant.',
+        )
+      } else {
+        setError(getApiErrorMessage(err, 'Identifiants incorrects. Vérifiez votre login et mot de passe.'))
+      }
     } finally {
       setIsLoading(false)
     }
@@ -171,6 +187,11 @@ export default function LoginPage() {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                {waking && isLoading && !error && (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm" role="status">
+                    Réveil du serveur en cours… Cela peut prendre jusqu'à une minute après une période d'inactivité.
+                  </div>
+                )}
                 {error && (
                   <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm" role="alert">
                     {error}
@@ -224,7 +245,7 @@ export default function LoginPage() {
                   {isLoading ? (
                     <span className="flex items-center gap-2">
                       <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connexion...
+                      {waking ? 'Réveil du serveur…' : 'Connexion...'}
                     </span>
                   ) : (
                     'Se connecter'
