@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '@/app/AuthContext'
 import { interventionApi } from '@/services/intervention'
 import type { Intervention } from '@/types/intervention'
 import { TYPE_INTERVENTION_LABELS, STATUT_INTERVENTION_LABELS } from '@/types/intervention'
+import { canDiagnoseFailure } from '@/utils/permissions'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
@@ -10,6 +12,7 @@ import SearchInput from '@/components/ui/SearchInput'
 import { Plus } from 'lucide-react'
 
 export default function InterventionsListPage() {
+  const { user: currentUser } = useAuth()
   const [interventions, setInterventions] = useState<Intervention[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -48,9 +51,11 @@ export default function InterventionsListPage() {
         title="Interventions"
         description={`${interventions.length} intervention${interventions.length > 1 ? 's' : ''}`}
         action={
-          <Link to="/interventions/new" className="btn-primary">
-            <Plus className="w-4 h-4" /> Nouvelle
-          </Link>
+          canDiagnoseFailure(currentUser) ? (
+            <Link to="/interventions/new" className="btn-primary">
+              <Plus className="w-4 h-4" /> Nouvelle
+            </Link>
+          ) : undefined
         }
       />
 

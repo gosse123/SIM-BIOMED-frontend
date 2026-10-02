@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '@/app/AuthContext'
 import { panneApi } from '@/services/panne'
 import type { Panne } from '@/types/panne'
 import { STATUT_PANNE_LABELS } from '@/types/panne'
+import { canReportFailure } from '@/utils/permissions'
 import { StatusBadge, CriticalityBadge } from '@/components/ui/StatusBadge'
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
 import { Plus } from 'lucide-react'
 
 export default function PannesListPage() {
+  const { user: currentUser } = useAuth()
   const [pannes, setPannes] = useState<Panne[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -40,9 +43,11 @@ export default function PannesListPage() {
         title="Gestion des pannes"
         description={`${pannes.length} panne${pannes.length > 1 ? 's' : ''}`}
         action={
-          <Link to="/failures/new" className="btn-danger">
-            <Plus className="w-4 h-4" /> Signaler
-          </Link>
+          canReportFailure(currentUser) ? (
+            <Link to="/failures/new" className="btn-danger">
+              <Plus className="w-4 h-4" /> Signaler
+            </Link>
+          ) : undefined
         }
       />
 

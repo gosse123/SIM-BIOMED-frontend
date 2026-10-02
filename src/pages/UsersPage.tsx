@@ -7,10 +7,13 @@ import { useAuth } from '@/app/AuthContext'
 import PageHeader from '@/components/ui/PageHeader'
 import SearchInput from '@/components/ui/SearchInput'
 import { EmptyState } from '@/components/ui/FeedbackStates'
+import { toast } from '@/components/ui/toast'
+import { getApiErrorMessage } from '@/utils/errors'
 import {
   UserPlus,
   Shield,
   UserX,
+  UserCheck,
   ChevronDown,
   X,
   Check,
@@ -29,11 +32,13 @@ function UserRow({
   user: u,
   isCurrentUser,
   onDeactivate,
+  onReactivate,
   onChangeRole,
 }: {
   user: User
   isCurrentUser: boolean
   onDeactivate: (u: User) => void
+  onReactivate: (u: User) => void
   onChangeRole: (u: User, role: string) => void
 }) {
   const [roleOpen, setRoleOpen] = useState(false)
@@ -107,6 +112,15 @@ function UserRow({
             <UserX className="w-4 h-4" />
           </button>
         )}
+        {!isCurrentUser && !u.is_active && (
+          <button
+            onClick={() => onReactivate(u)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+            title="Réactiver"
+          >
+            <UserCheck className="w-4 h-4" />
+          </button>
+        )}
       </td>
     </tr>
   )
@@ -172,12 +186,13 @@ function CreateUserPanel({
     setError('')
     try {
       await usersApi.create(createData)
+      toast('success', 'Utilisateur créé avec succès')
       onCreated()
       setCreateData({ username: '', email: '', password: '', first_name: '', last_name: '', role: 'TECHNICIEN' })
       setTouched({})
       onClose()
-    } catch {
-      setError('Erreur lors de la création. Vérifiez les informations.')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Erreur lors de la création. Vérifiez les informations.'))
     } finally {
       setCreating(false)
     }
@@ -401,19 +416,31 @@ export default function UsersPage() {
     if (!deactivateTarget) return
     try {
       await usersApi.deactivate(deactivateTarget.id)
+      toast('success', `Utilisateur « ${deactivateTarget.username} » désactivé`)
       setDeactivateTarget(null)
       fetchUsers()
-    } catch {
-      setError('Erreur lors de la désactivation.')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Erreur lors de la désactivation.'))
     }
   }
 
   const handleChangeRole = async (u: User, role: string) => {
     try {
       await usersApi.setRole(u.id, role)
+      toast('success', `Rôle de « ${u.username} » modifié (${ROLE_LABELS[role as keyof typeof ROLE_LABELS] || role})`)
       fetchUsers()
-    } catch {
-      setError('Erreur lors du changement de rôle.')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Erreur lors du changement de rôle.'))
+    }
+  }
+
+  const handleReactivate = async (u: User) => {
+    try {
+      await usersApi.reactivate(u.id)
+      toast('success', `Utilisateur « ${u.username} » réactivé`)
+      fetchUsers()
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Erreur lors de la réactivation.'))
     }
   }
 
@@ -515,6 +542,7 @@ export default function UsersPage() {
                     user={u}
                     isCurrentUser={u.id === currentUser?.id}
                     onDeactivate={setDeactivateTarget}
+                    onReactivate={handleReactivate}
                     onChangeRole={handleChangeRole}
                   />
                 ))

@@ -6,6 +6,7 @@ import { panneApi } from '@/services/panne'
 import { equipmentApi } from '@/services/equipment'
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
+import { CRITICITE_LABELS } from '@/components/ui/StatusBadge'
 import { toast } from '@/components/ui/toast'
 import { getApiErrorMessage } from '@/utils/errors'
 import QualifyModal from '@/components/panne/QualifyModal'
@@ -325,7 +326,7 @@ export default function WorkQueuePage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${CRITICITE_COLORS[panne.niveau_criticite] || ''}`}>
-                        {panne.niveau_criticite}
+                        {CRITICITE_LABELS[panne.niveau_criticite] || panne.niveau_criticite}
                       </span>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -517,7 +518,7 @@ export default function WorkQueuePage() {
               {Object.entries(CRITICITE_COLORS).map(([key, color]) => (
                 <div key={key} className="flex items-center gap-2">
                   <span className={`w-3 h-3 rounded-full ${color}`} />
-                  <span className="text-xs text-slate-600">{key}</span>
+                  <span className="text-xs text-slate-600">{CRITICITE_LABELS[key] || key}</span>
                 </div>
               ))}
             </div>

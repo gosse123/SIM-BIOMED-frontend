@@ -1,16 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '@/app/AuthContext'
 import { demandesApi } from '@/services/api'
 import type { DemandeAcces } from '@/types/demandes'
-import { ROLE_LABELS } from '@/utils/permissions'
+import { isAdmin, ROLE_LABELS } from '@/utils/permissions'
 import PageHeader from '@/components/ui/PageHeader'
 import SearchInput from '@/components/ui/SearchInput'
 import { EmptyState } from '@/components/ui/FeedbackStates'
+import { toast } from '@/components/ui/toast'
+import { getApiErrorMessage } from '@/utils/errors'
 import {
   CheckCircle2,
   XCircle,
   Clock,
   X,
   Filter,
+  Copy,
 } from 'lucide-react'
 
 const STATUT_CONFIG = {
@@ -89,12 +93,14 @@ function DemandeRow({
 }
 
 export default function DemandesPage() {
+  const { user: currentUser } = useAuth()
   const [demandes, setDemandes] = useState<DemandeAcces[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterStatut, setFilterStatut] = useState<string>('')
   const [rejectTarget, setRejectTarget] = useState<DemandeAcces | null>(null)
   const [rejectMotif, setRejectMotif] = useState('')
+  const [approveResult, setApproveResult] = useState<{ username: string; tempPassword?: string } | null>(null)
 
   const fetchDemandes = useCallback(async () => {
     try {
@@ -106,23 +112,42 @@ export default function DemandesPage() {
     }
   }, [filterStatut])
 
-  useEffect(() => { fetchDemandes() }, [fetchDemandes])
+  useEffect(() => { if (isAdmin(currentUser)) fetchDemandes() }, [fetchDemandes, currentUser])
 
   const handleApprove = async (d: DemandeAcces) => {
     try {
-      await demandesApi.approve(d.id)
+      const res = await demandesApi.approve(d.id)
+      setApproveResult({
+        username: res.user?.username || d.email,
+        tempPassword: res.temp_password,
+      })
       fetchDemandes()
-    } catch { /* silent */ }
+    } catch (err) {
+      toast('error', getApiErrorMessage(err, "Erreur lors de l'approbation de la demande."))
+    }
   }
 
   const handleReject = async () => {
     if (!rejectTarget) return
     try {
       await demandesApi.reject(rejectTarget.id, rejectMotif)
+      toast('success', `Demande de ${rejectTarget.nom_complet} rejetée`)
       setRejectTarget(null)
       setRejectMotif('')
       fetchDemandes()
-    } catch { /* silent */ }
+    } catch (err) {
+      toast('error', getApiErrorMessage(err, 'Erreur lors du rejet de la demande.'))
+    }
+  }
+
+  const copyTempPassword = async () => {
+    if (!approveResult?.tempPassword) return
+    try {
+      await navigator.clipboard.writeText(approveResult.tempPassword)
+      toast('success', 'Mot de passe temporaire copié')
+    } catch {
+      toast('error', 'Impossible de copier le mot de passe.')
+    }
   }
 
   const filtered = demandes.filter((d) => {
@@ -134,6 +159,14 @@ export default function DemandesPage() {
   })
 
   const enAttente = demandes.filter((d) => d.statut === 'EN_ATTENTE').length
+
+  if (!isAdmin(currentUser)) {
+    return (
+      <div className="space-y-6">
+        <EmptyState title="Accès refusé" description="Seul un administrateur peut traiter les demandes d'accès." />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -213,6 +246,57 @@ export default function DemandesPage() {
             <div className="flex justify-end gap-2">
               <button onClick={() => { setRejectTarget(null); setRejectMotif('') }} className="btn-secondary">Annuler</button>
               <button onClick={handleReject} className="btn-danger">Rejeter</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approve Modal — identifiants à transmettre une seule fois */}
+      {approveResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="approve-title"
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <h2 id="approve-title" className="text-lg font-bold text-slate-900">Demande approuvée</h2>
+              <button
+                onClick={() => setApproveResult(null)}
+                aria-label="Fermer"
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-slate-600">
+              Le compte <strong>{approveResult.username}</strong> a été créé et activé.
+            </p>
+            {approveResult.tempPassword && (
+              <div className="space-y-2">
+                <span className="input-label">Mot de passe temporaire</span>
+                <div className="flex items-stretch gap-2">
+                  <code className="flex-1 min-w-0 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-mono break-all">
+                    {approveResult.tempPassword}
+                  </code>
+                  <button
+                    onClick={copyTempPassword}
+                    className="btn-secondary shrink-0 text-xs"
+                    aria-label="Copier le mot de passe temporaire"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copier
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+              Ce mot de passe temporaire ne sera plus affiché. Communiquez-le à l'utilisateur
+              par un canal sûr : il devra le changer à la première connexion.
+            </div>
+            <div className="flex justify-end">
+              <button onClick={() => setApproveResult(null)} className="btn-primary">Fermer</button>
             </div>
           </div>
         </div>

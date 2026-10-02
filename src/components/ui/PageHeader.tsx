@@ -24,7 +24,7 @@ export default function PageHeader({ title, description, action, breadcrumbs }: 
       )}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1>{title}</h1>
+          {title && <h1>{title}</h1>}
           {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
         </div>
         {action && <div className="shrink-0">{action}</div>}

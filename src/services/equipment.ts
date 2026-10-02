@@ -93,4 +93,16 @@ export const equipmentApi = {
     const cached = await get<Localisation[] | { results?: Localisation[] }>('locations', cacheKey)
     return cached ? normalizeList<Localisation>(cached) : []
   },
+
+  createService: async (service: { nom: string; description?: string }): Promise<Service> => {
+    const { data } = await api.post<Service>('/services/', service)
+    return data
+  },
+
+  createLocation: async (
+    location: { batiment: string; etage?: string; salle: string }
+  ): Promise<Localisation> => {
+    const { data } = await api.post<Localisation>('/locations/', location)
+    return data
+  },
 }

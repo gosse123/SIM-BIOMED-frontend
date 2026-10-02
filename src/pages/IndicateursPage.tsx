@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '@/app/AuthContext'
+import { canViewIndicators } from '@/utils/permissions'
 import { indicateursApi, type Indicateur } from '@/services/indicateurs'
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
@@ -7,6 +9,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TrendingUp, Clock, AlertTriangle } from 'lucide-react'
 
 export default function IndicateursPage() {
+  const { user: currentUser } = useAuth()
   const [indicateurs, setIndicateurs] = useState<Indicateur[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -24,7 +27,15 @@ export default function IndicateursPage() {
     }
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { if (canViewIndicators(currentUser)) fetchData() }, [currentUser])
+
+  if (!canViewIndicators(currentUser)) {
+    return (
+      <div className="space-y-6">
+        <EmptyState title="Accès refusé" description="Les indicateurs sont réservés à l'administrateur et à la direction." />
+      </div>
+    )
+  }
 
   if (loading) return <LoadingState />
   if (error) return <ErrorState message={error} onRetry={fetchData} />

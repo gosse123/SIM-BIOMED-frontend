@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '@/app/AuthContext'
 import { Plus, Eye, Download } from 'lucide-react'
 import { equipmentApi } from '@/services/equipment'
+import { canManageEquipment } from '@/utils/permissions'
 import type { Equipment, Service } from '@/types/equipment'
-import { StatusBadge, CriticalityBadge } from '@/components/ui/StatusBadge'
+import { StatusBadge, CriticalityBadge, STATUS_LABELS, CRITICITE_LABELS } from '@/components/ui/StatusBadge'
 import SearchInput from '@/components/ui/SearchInput'
 import PageHeader from '@/components/ui/PageHeader'
 import { ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
+import { toast } from '@/components/ui/toast'
 import { getApiErrorMessage } from '@/utils/errors'
 
 function SkeletonRow() {
@@ -25,7 +28,9 @@ function exportCSV(items: Equipment[]) {
   const headers = ['N° Inventaire', 'Nom', 'Type', 'Marque', 'Modèle', 'Service', 'Statut', 'Criticité']
   const rows = items.map(e => [
     e.num_inventaire, e.nom, e.type_equipement, e.marque, e.modele,
-    e.service_nom || '', e.etat_operationnel, e.niveau_criticite
+    e.service_nom || '',
+    STATUS_LABELS[e.etat_operationnel] || e.etat_operationnel,
+    CRITICITE_LABELS[e.niveau_criticite] || e.niveau_criticite,
   ])
   const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -38,6 +43,7 @@ function exportCSV(items: Equipment[]) {
 }
 
 export default function EquipmentListPage() {
+  const { user: currentUser } = useAuth()
   const [items, setItems] = useState<Equipment[]>([])
   const [services, setServices] = useState<Service[]>([])
   const [loading, setLoading] = useState(true)
@@ -76,7 +82,13 @@ export default function EquipmentListPage() {
     return matchSearch && matchStatus && matchCriticality && matchService
   })
 
-  const handleExport = useCallback(() => exportCSV(filtered), [filtered])
+  const handleExport = useCallback(() => {
+    if (filtered.length === 0) {
+      toast('info', 'Aucun équipement à exporter.')
+      return
+    }
+    exportCSV(filtered)
+  }, [filtered])
 
   if (loading) return (
     <div className="space-y-6">
@@ -105,12 +117,20 @@ export default function EquipmentListPage() {
         description={`${items.length} équipement${items.length > 1 ? 's' : ''} enregistré${items.length > 1 ? 's' : ''}`}
         action={
           <div className="flex items-center gap-2">
-            <button onClick={handleExport} className="btn-secondary text-xs" aria-label="Exporter en CSV">
+            <button
+              onClick={handleExport}
+              disabled={filtered.length === 0}
+              className="btn-secondary text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Exporter en CSV"
+              title={filtered.length === 0 ? 'Aucun résultat à exporter' : 'Exporter les résultats affichés en CSV'}
+            >
               <Download className="w-4 h-4" /> Export CSV
             </button>
-            <Link to="/equipment/new" className="btn-primary">
-              <Plus className="w-4 h-4" /> Ajouter
-            </Link>
+            {canManageEquipment(currentUser) && (
+              <Link to="/equipment/new" className="btn-primary">
+                <Plus className="w-4 h-4" /> Ajouter
+              </Link>
+            )}
           </div>
         }
       />

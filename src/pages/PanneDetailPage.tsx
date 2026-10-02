@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
+import { useAuth } from '@/app/AuthContext'
 import { panneApi } from '@/services/panne'
 import type { Panne } from '@/types/panne'
+import type { User } from '@/types/auth'
+import { canCloseFailure, canDiagnoseFailure, canQualifyFailure } from '@/utils/permissions'
 import { StatusBadge, CriticalityBadge } from '@/components/ui/StatusBadge'
 import { LoadingState, ErrorState } from '@/components/ui/FeedbackStates'
 import { ConfirmDialog } from '@/components/ui/Modal'
 import { toast } from '@/components/ui/toast'
 import { getApiErrorMessage } from '@/utils/errors'
+import { userDisplayName } from '@/utils/user'
 import PageHeader from '@/components/ui/PageHeader'
 import QualifyModal from '@/components/panne/QualifyModal'
 import CriticiteModal from '@/components/panne/CriticiteModal'
@@ -15,8 +19,20 @@ import TestResultModal from '@/components/panne/TestResultModal'
 
 type ModalType = 'QUALIFIEE' | 'CRITICITE_EVALUEE' | 'EN_DIAGNOSTIC' | 'EN_INTERVENTION' | 'EN_ATTENTE_PIECE' | 'EN_ATTENTE_PRESTATAIRE' | 'EN_TEST' | 'CLOSE' | null
 
+const TRANSITION_ACCESS: Record<Exclude<ModalType, null>, (user: User | null) => boolean> = {
+  QUALIFIEE: canQualifyFailure,
+  CRITICITE_EVALUEE: canQualifyFailure,
+  EN_DIAGNOSTIC: canDiagnoseFailure,
+  EN_INTERVENTION: canDiagnoseFailure,
+  EN_ATTENTE_PIECE: canQualifyFailure,
+  EN_ATTENTE_PRESTATAIRE: canQualifyFailure,
+  EN_TEST: canDiagnoseFailure,
+  CLOSE: canCloseFailure,
+}
+
 export default function PanneDetailPage() {
   const { id } = useParams()
+  const { user: currentUser } = useAuth()
   const [panne, setPanne] = useState<Panne | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -56,6 +72,10 @@ export default function PanneDetailPage() {
   if (isLoading) return <LoadingState />
   if (error || !panne) return <ErrorState message={error || 'Panne introuvable.'} onRetry={() => loadPanne(Number(id))} />
 
+  const allowedTransitions = (panne.transitions_valides ?? []).filter(
+    (t) => TRANSITION_ACCESS[t as Exclude<ModalType, null>]?.(currentUser) ?? true,
+  )
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -73,24 +93,26 @@ export default function PanneDetailPage() {
       />
 
       {/* Actions */}
-      <div className="card p-4">
-        <div className="flex flex-wrap gap-2">
-          {panne.transitions_valides?.map((t) => (
-            <button
-              key={t}
-              disabled={actionLoading}
-              onClick={() => setModal(t as ModalType)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition ${
-                t === 'CLOSE' ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : t === 'EN_INTERVENTION' ? 'bg-sky-600 text-white hover:bg-sky-700'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {t.replace(/_/g, ' ')}
-            </button>
-          ))}
+      {allowedTransitions.length > 0 && (
+        <div className="card p-4">
+          <div className="flex flex-wrap gap-2">
+            {allowedTransitions.map((t) => (
+              <button
+                key={t}
+                disabled={actionLoading}
+                onClick={() => setModal(t as ModalType)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition ${
+                  t === 'CLOSE' ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : t === 'EN_INTERVENTION' ? 'bg-sky-600 text-white hover:bg-sky-700'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {t.replace(/_/g, ' ')}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Info cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -98,7 +120,7 @@ export default function PanneDetailPage() {
           <h2>Signalement</h2>
           <p className="text-sm text-slate-700">{panne.description_signalement}</p>
           <p className="text-xs text-slate-500 mt-2">
-            Par {panne.signale_par_detail?.first_name} {panne.signale_par_detail?.last_name}
+            Par {userDisplayName(panne.signale_par_detail)}
             {' • '}{new Date(panne.date_signalement).toLocaleDateString('fr-FR')}
           </p>
         </div>
@@ -109,7 +131,7 @@ export default function PanneDetailPage() {
             <p className="text-sm text-slate-700">{panne.observation_qualification}</p>
             {panne.critere_urgence && <p className="text-xs text-slate-500">Urgence : {panne.critere_urgence}</p>}
             <p className="text-xs text-slate-500">
-              Le {new Date(panne.date_qualification).toLocaleDateString('fr-FR')} par {panne.qualifiee_par_detail?.first_name}
+              Le {new Date(panne.date_qualification).toLocaleDateString('fr-FR')} par {userDisplayName(panne.qualifiee_par_detail)}
             </p>
           </div>
         )}

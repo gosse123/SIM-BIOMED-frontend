@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
+import { useAuth } from '@/app/AuthContext'
 import { panneApi } from '@/services/panne'
 import { equipmentApi } from '@/services/equipment'
 import type { Equipment } from '@/types/equipment'
-import { LoadingState } from '@/components/ui/FeedbackStates'
+import { canReportFailure } from '@/utils/permissions'
+import { LoadingState, EmptyState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
 import { toast } from '@/components/ui/toast'
 import { AlertTriangle, Save } from 'lucide-react'
 
 export default function ReportPannePage() {
+  const { user: currentUser } = useAuth()
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
   const [selectedEquipment, setSelectedEquipment] = useState('')
   const [description, setDescription] = useState('')
@@ -16,6 +19,12 @@ export default function ReportPannePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+
+  useEffect(() => {
+    const equipmentParam = searchParams.get('equipment')
+    if (equipmentParam) setSelectedEquipment(equipmentParam)
+  }, [searchParams])
 
   useEffect(() => {
     equipmentApi.list()
@@ -41,6 +50,14 @@ export default function ReportPannePage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (!canReportFailure(currentUser)) {
+    return (
+      <div className="space-y-6">
+        <EmptyState title="Accès refusé" description="Le signalement de panne est réservé aux rôles habilités (responsable, technicien, personnel soignant)." />
+      </div>
+    )
   }
 
   if (isLoading) return <LoadingState />

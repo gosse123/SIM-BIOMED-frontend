@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Activity, AlertTriangle, Wrench, Clock, ChevronRight } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine } from 'recharts'
 import KpiCard from '@/components/ui/KpiCard'
-import { StatusBadge, CriticalityBadge } from '@/components/ui/StatusBadge'
+import { StatusBadge, CriticalityBadge, STATUS_LABELS } from '@/components/ui/StatusBadge'
 import { LoadingState, ErrorState } from '@/components/ui/FeedbackStates'
 import { dashboardApi, type DashboardData } from '@/services/dashboard'
 import { workqueueApi, type WorkQueueItem } from '@/services/workqueue'
@@ -16,15 +16,15 @@ const STATUS_COLORS: Record<string, string> = {
   FONCTIONNEL_SOUS_SURVEILLANCE: '#ea580c',
   HORS_SERVICE: '#64748b',
   REFORME: '#94a3b8',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  FONCTIONNEL: 'Fonctionnel',
-  EN_PANNE: 'En panne',
-  EN_MAINTENANCE: 'En maintenance',
-  FONCTIONNEL_SOUS_SURVEILLANCE: 'Sous surveillance',
-  HORS_SERVICE: 'Hors service',
-  REFORME: 'Réformé',
+  SIGNALEE: '#dc2626',
+  QUALIFIEE: '#f59e0b',
+  CRITICITE_EVALUEE: '#f97316',
+  EN_DIAGNOSTIC: '#2563eb',
+  EN_INTERVENTION: '#0284c7',
+  EN_TEST: '#8b5cf6',
+  EN_ATTENTE_PIECE: '#f59e0b',
+  EN_ATTENTE_PRESTATAIRE: '#fbbf24',
+  CLOSE: '#16a34a',
 }
 
 const CRITICITE_ROW_COLORS: Record<string, string> = {

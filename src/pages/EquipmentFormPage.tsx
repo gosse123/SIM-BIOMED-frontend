@@ -10,6 +10,27 @@ import { toast } from '@/components/ui/toast'
 import { getApiErrorMessage } from '@/utils/errors'
 import { QrCode, Save } from 'lucide-react'
 
+function parseLocalisation(text: string): { batiment: string; etage: string; salle: string } {
+  const trimmed = text.trim()
+  const dashParts = trimmed.split(/\s+-\s+/)
+  if (dashParts.length >= 2) {
+    return {
+      batiment: dashParts[0].trim(),
+      etage: '',
+      salle: dashParts.slice(1).join(' - ').trim(),
+    }
+  }
+  const commaParts = trimmed.split(',')
+  if (commaParts.length >= 2) {
+    return {
+      batiment: commaParts[0].trim(),
+      etage: '',
+      salle: commaParts.slice(1).join(',').trim(),
+    }
+  }
+  return { batiment: trimmed, etage: '', salle: 'Non précisée' }
+}
+
 export default function EquipmentFormPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -96,9 +117,49 @@ export default function EquipmentFormPage() {
     setError('')
     setIsSubmitting(true)
     try {
-      // Try to match service/location text to existing IDs
-      const matchedService = services.find(s => s.nom.toLowerCase() === form.service_nom.toLowerCase())
-      const matchedLocation = locations.find(l => `${l.batiment} - ${l.salle}`.toLowerCase() === form.localisation_text.toLowerCase())
+      const norm = (s: string) =>
+        s.trim().toLowerCase().replace(/\s*,\s*/g, ' - ').replace(/\s+/g, ' ')
+      const matchedService = services.find(
+        s => s.nom.trim().toLowerCase() === form.service_nom.trim().toLowerCase()
+      )
+      const matchedLocation = locations.find(
+        l => norm(`${l.batiment} - ${l.salle}`) === norm(form.localisation_text)
+      )
+
+      let serviceId = matchedService?.id
+      if (!serviceId && form.service_nom.trim()) {
+        const nom = form.service_nom.trim()
+        try {
+          const created = await equipmentApi.createService({ nom })
+          serviceId = created.id
+          setServices(prev => [...prev, created])
+          toast('info', `Service « ${created.nom} » créé automatiquement`)
+        } catch (err) {
+          const refreshed = await equipmentApi.listServices()
+          setServices(refreshed)
+          const fallback = refreshed.find(s => s.nom.trim().toLowerCase() === nom.toLowerCase())
+          if (fallback) serviceId = fallback.id
+          else throw err
+        }
+      }
+
+      let locationId = matchedLocation?.id
+      if (!locationId && form.localisation_text.trim()) {
+        const parsed = parseLocalisation(form.localisation_text)
+        try {
+          const created = await equipmentApi.createLocation(parsed)
+          locationId = created.id
+          setLocations(prev => [...prev, created])
+          toast('info', `Localisation « ${created.batiment} - ${created.salle} » créée automatiquement`)
+        } catch (err) {
+          const refreshed = await equipmentApi.listLocations()
+          setLocations(refreshed)
+          const key = norm(`${parsed.batiment} - ${parsed.salle}`)
+          const fallback = refreshed.find(l => norm(`${l.batiment} - ${l.salle}`) === key)
+          if (fallback) locationId = fallback.id
+          else throw err
+        }
+      }
 
       const payload: Partial<Equipment> = {
         num_inventaire: form.num_inventaire,
@@ -108,8 +169,8 @@ export default function EquipmentFormPage() {
         marque: form.marque,
         modele: form.modele,
         num_serie: form.num_serie,
-        service: matchedService?.id,
-        localisation: matchedLocation?.id,
+        service: serviceId,
+        localisation: locationId,
         date_reception: form.date_reception || undefined,
         date_installation: form.date_installation || undefined,
         date_mise_service: form.date_mise_service || undefined,
@@ -214,6 +275,7 @@ export default function EquipmentFormPage() {
             <datalist id="services-list">
               {services.map(s => <option key={s.id} value={s.nom} />)}
             </datalist>
+            <p className="text-xs text-slate-400 mt-1">Saisissez un nouveau nom : le service sera créé automatiquement.</p>
           </div>
           <div>
             <label htmlFor="localisation_text" className="input-label">Localisation *</label>
@@ -230,6 +292,7 @@ export default function EquipmentFormPage() {
             <datalist id="locations-list">
               {locations.map(l => <option key={l.id} value={`${l.batiment} - ${l.salle}`} />)}
             </datalist>
+            <p className="text-xs text-slate-400 mt-1">Format Bâtiment, Salle : la localisation sera créée automatiquement.</p>
           </div>
         </div>
 

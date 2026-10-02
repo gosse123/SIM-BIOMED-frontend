@@ -37,6 +37,14 @@ const CRITICALITY_CONFIG: Record<string, { label: string; className: string }> =
   FAIBLE: { label: 'Faible', className: 'text-slate-500 text-xs font-medium' },
 }
 
+export const STATUS_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(STATUS_CONFIG).map(([key, cfg]) => [key, cfg.label])
+)
+
+export const CRITICITE_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(CRITICALITY_CONFIG).map(([key, cfg]) => [key, cfg.label])
+)
+
 export function StatusBadge({ status, size = 'sm' }: StatusBadgeProps) {
   const config = STATUS_CONFIG[status] || { label: status, className: 'text-slate-500' }
   const sizeClass = size === 'sm' ? 'text-[10px]' : 'text-xs'

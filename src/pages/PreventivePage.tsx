@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '@/app/AuthContext'
 import { preventiveApi } from '@/services/preventive'
 import type { MaintenancePreventive } from '@/types/preventive'
+import { canExecutePreventive } from '@/utils/permissions'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
@@ -9,6 +11,7 @@ import { getApiErrorMessage } from '@/utils/errors'
 import { Play, CheckCircle2 } from 'lucide-react'
 
 export default function PreventivePage() {
+  const { user: currentUser } = useAuth()
   const [maintenances, setMaintenances] = useState<MaintenancePreventive[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -80,10 +83,10 @@ export default function PreventivePage() {
                     <td className="px-4 py-3"><StatusBadge status={mp.statut} /></td>
                     <td className="px-4 py-3 text-sm text-slate-500">{new Date(mp.date_planifiee).toLocaleDateString('fr-FR')}</td>
                     <td className="px-4 py-3 flex gap-2">
-                      {mp.statut === 'PLANIFIEE' && (
+                      {canExecutePreventive(currentUser) && mp.statut === 'PLANIFIEE' && (
                         <button onClick={() => handleStart(mp.id)} className="btn-primary text-xs"><Play className="w-3 h-3" /> Démarrer</button>
                       )}
-                      {mp.statut === 'EN_COURS' && (
+                      {canExecutePreventive(currentUser) && mp.statut === 'EN_COURS' && (
                         <button onClick={() => handleFinish(mp.id)} className="btn-primary text-xs"><CheckCircle2 className="w-3 h-3" /> Terminer</button>
                       )}
                     </td>
@@ -103,10 +106,12 @@ export default function PreventivePage() {
                   </div>
                   <StatusBadge status={mp.statut} />
                 </div>
-                <div className="mt-3 flex gap-2">
-                  {mp.statut === 'PLANIFIEE' && <button onClick={() => handleStart(mp.id)} className="btn-primary text-xs"><Play className="w-3 h-3" /> Démarrer</button>}
-                  {mp.statut === 'EN_COURS' && <button onClick={() => handleFinish(mp.id)} className="btn-primary text-xs"><CheckCircle2 className="w-3 h-3" /> Terminer</button>}
-                </div>
+                {canExecutePreventive(currentUser) && (mp.statut === 'PLANIFIEE' || mp.statut === 'EN_COURS') && (
+                  <div className="mt-3 flex gap-2">
+                    {mp.statut === 'PLANIFIEE' && <button onClick={() => handleStart(mp.id)} className="btn-primary text-xs"><Play className="w-3 h-3" /> Démarrer</button>}
+                    {mp.statut === 'EN_COURS' && <button onClick={() => handleFinish(mp.id)} className="btn-primary text-xs"><CheckCircle2 className="w-3 h-3" /> Terminer</button>}
+                  </div>
+                )}
               </div>
             ))}
           </div>

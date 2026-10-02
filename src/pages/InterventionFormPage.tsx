@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
+import { useAuth } from '@/app/AuthContext'
 import { interventionApi } from '@/services/intervention'
 import { equipmentApi } from '@/services/equipment'
 import { panneApi } from '@/services/panne'
@@ -7,13 +8,15 @@ import type { Equipment } from '@/types/equipment'
 import type { Panne } from '@/types/panne'
 import type { TypeIntervention } from '@/types/intervention'
 import { TYPE_INTERVENTION_LABELS } from '@/types/intervention'
-import { LoadingState } from '@/components/ui/FeedbackStates'
+import { canDiagnoseFailure } from '@/utils/permissions'
+import { LoadingState, EmptyState } from '@/components/ui/FeedbackStates'
 import PageHeader from '@/components/ui/PageHeader'
 import { toast } from '@/components/ui/toast'
 import { getApiErrorMessage } from '@/utils/errors'
 import { Wrench, ShieldAlert } from 'lucide-react'
 
 export default function InterventionFormPage() {
+  const { user: currentUser } = useAuth()
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
   const [pannes, setPannes] = useState<Panne[]>([])
   const [selectedEquipment, setSelectedEquipment] = useState('')
@@ -72,6 +75,14 @@ export default function InterventionFormPage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (!canDiagnoseFailure(currentUser)) {
+    return (
+      <div className="space-y-6">
+        <EmptyState title="Accès refusé" description="La création d'intervention est réservée aux rôles d'exécution (administrateur, responsable, technicien)." />
+      </div>
+    )
   }
 
   if (isLoading) return <LoadingState />

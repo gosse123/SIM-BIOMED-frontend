@@ -48,6 +48,11 @@ export function canManageEquipment(user: User | null): boolean {
   return ['ADMINISTRATEUR', 'RESPONSABLE_BIOMEDICAL'].includes(user.role)
 }
 
+export function canExecutePreventive(user: User | null): boolean {
+  if (!user) return false
+  return ['ADMINISTRATEUR', 'RESPONSABLE_BIOMEDICAL', 'TECHNICIEN'].includes(user.role)
+}
+
 export function canQualifyFailure(user: User | null): boolean {
   return canManageEquipment(user)
 }

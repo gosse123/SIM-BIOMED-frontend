@@ -410,6 +410,10 @@ export const usersApi = {
     await api.post(`/users/${id}/deactivate/`)
   },
 
+  reactivate: async (id: number): Promise<void> => {
+    await api.post(`/users/${id}/reactivate/`)
+  },
+
   setRole: async (id: number, role: string): Promise<void> => {
     await api.post(`/users/${id}/set-role/`, { role })
   },
@@ -433,7 +437,7 @@ export const demandesApi = {
     return data
   },
 
-  approve: async (id: number): Promise<{ detail: string; user: User }> => {
+  approve: async (id: number): Promise<{ detail: string; user: User; temp_password?: string }> => {
     const { data } = await api.post(`/demandes/${id}/approve/`)
     return data
   },

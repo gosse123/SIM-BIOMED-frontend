@@ -22,6 +22,23 @@ export default function QrScanner({ onScan, onClose }: QrScannerProps) {
   const [scanning, setScanning] = useState(false)
   const scannerRef = useRef<Html5Qrcode | null>(null)
 
+  const close = () => {
+    void scannerRef.current?.stop()
+    onClose()
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        close()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose])
+
   useEffect(() => {
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
       navigator.userAgent
@@ -81,20 +98,24 @@ export default function QrScanner({ onScan, onClose }: QrScannerProps) {
   }, [onScan])
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl overflow-hidden max-w-md w-full">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="font-semibold text-slate-900">Scanner QR Code</h3>
-          <button
-            onClick={() => {
-              void scannerRef.current?.stop()
-              onClose()
-            }}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 bg-black/80 overflow-y-auto p-4">
+      <div className="flex min-h-full items-center justify-center">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="qr-scanner-title"
+          className="bg-white rounded-2xl overflow-hidden max-w-md w-full max-h-[calc(100vh-2rem)] overflow-y-auto"
+        >
+          <div className="flex items-center justify-between p-4 border-b">
+            <h3 id="qr-scanner-title" className="font-semibold text-slate-900">Scanner QR Code</h3>
+            <button
+              onClick={close}
+              aria-label="Fermer le scanner"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
         <div className="relative aspect-square bg-black">
           {error ? (
@@ -122,6 +143,7 @@ export default function QrScanner({ onScan, onClose }: QrScannerProps) {
           <p className="text-xs text-slate-500">
             Positionnez le QR code de l'equipement dans le cadre
           </p>
+        </div>
         </div>
       </div>
     </div>
